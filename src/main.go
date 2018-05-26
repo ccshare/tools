@@ -1,6 +1,7 @@
 package main
 
 import (
+	"crypto/md5"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -59,6 +60,7 @@ func upload(serverURL, entryKey, token, filename string) {
 	postResp, err := http.Post(postURL, "application/octet-stream", file)
 	if err != nil {
 		log.Fatal(err)
+		return
 	}
 
 	defer postResp.Body.Close()
@@ -67,6 +69,7 @@ func upload(serverURL, entryKey, token, filename string) {
 		log.Fatal(err)
 	}
 	log.Println(string(postBody))
+	return
 }
 
 func download(serverURL, entryKey, token, filename string) {
@@ -88,10 +91,22 @@ func download(serverURL, entryKey, token, filename string) {
 	io.Copy(file, getResp.Body)
 
 	log.Println("Download finish ", filename)
+	return
+}
+
+func md5sum(filename string) (string, error) {
+	file, err := os.Open(filename)
+	if err != nil {
+		fmt.Println(err)
+		return "", err
+	}
+	md5h := md5.New()
+	io.Copy(md5h, file)
+	fmd5 := fmt.Sprintf("%x", md5h.Sum([]byte("")))
+	return fmd5, nil
 }
 
 func main() {
-	fmt.Println("start")
 	host := flag.String("host", "localhost", "hostname")
 	port := flag.Int("port", 3000, "port")
 	key := flag.String("key", "key", "key")
@@ -103,24 +118,40 @@ func main() {
 
 	flag.Parse()
 	rand.Seed(time.Now().Unix())
-	prefixKey := fmt.Sprintf("%s-%04d", *key, rand.Intn(4096))
+	randValue := rand.Intn(8192)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
 	fmt.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
+	log.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
 
 	for i := 0; i < *num; i++ {
-		randKey := fmt.Sprintf("%s-%05d", prefixKey, i)
+		randKey := fmt.Sprintf("%s-%04d-%05d", *key, randValue, i)
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
 			log.Fatal(err)
 		}
 		upload(serverURL, randKey, ptoken, *ufile)
+		umd5, err := md5sum(*ufile)
+		if err != nil {
+			log.Println("calc ufile md5 error: ", err)
+			break
+		}
 
 		gtoken, err := token(serverURL, randKey, "get")
 		if err != nil {
 			log.Fatal(err)
 		}
 		download(serverURL, randKey, gtoken, *sfile)
+		dmd5, err := md5sum(*sfile)
+		if err != nil {
+			log.Println("calc sfile md5 error: ", err)
+			break
+		}
+		if umd5 != dmd5 {
+			log.Printf("checkmd5 failed  %s != %s", umd5, dmd5)
+		} else {
+			log.Printf("checkmd5 success %s == %s", umd5, dmd5)
+		}
 
 	}
 
