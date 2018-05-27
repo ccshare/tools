@@ -106,32 +106,63 @@ func md5sum(filename string) (string, error) {
 	return fmd5, nil
 }
 
-func main() {
-	host := flag.String("host", "localhost", "hostname")
-	port := flag.Int("port", 3000, "port")
-	key := flag.String("key", "key", "key")
-	ufile := flag.String("ufile", "/tmp/ufile", "upload filename")
-	sfile := flag.String("save", "/tmp/downfile", "save download filename")
-	num := flag.Int("num", 1024, "upload/download times")
-	debug := flag.Bool("debug", false, "enable/disable debug mode")
-	ignore := flag.Bool("i", false, "ignore failed validation")
+func onlyUpload(serverURL, key, filename string) {
+	randKey := fmt.Sprintf("%s-sufix", key)
+	ptoken, err := token(serverURL, randKey, "put")
+	if err != nil {
+		log.Fatal(err)
+	}
+	upload(serverURL, randKey, ptoken, filename)
+	umd5, err := md5sum(filename)
+	if err != nil {
+		log.Println("calc ufile md5 error: ", err)
+	}
+	fmt.Printf("file: %s, md5: %s", filename, umd5)
+}
 
-	flag.Parse()
+func onlyDownload(serverURL, key, filename string) {
+	gtoken, err := token(serverURL, key, "get")
+	if err != nil {
+		log.Fatal(err)
+		return
+	}
+	var sfile string
+	if filename == "filename" {
+		sfile = fmt.Sprintf("file-%s.down", key)
+	} else {
+		sfile = filename
+	}
+	download(serverURL, key, gtoken, sfile)
+	dmd5, err := md5sum(sfile)
+	if err != nil {
+		log.Println("calc sfile md5 error: ", err)
+	}
+	fmt.Printf("file: %s, md5: %s", filename, dmd5)
+}
+
+func validateUploadDownload(serverURL string, key string, num uint) string {
 	rand.Seed(time.Now().Unix())
 	randValue := rand.Intn(8192)
 
-	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
-	fmt.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
-	log.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
-
-	for i := 0; i < *num; i++ {
-		randKey := fmt.Sprintf("%s-%04d-%05d", *key, randValue, i)
+	ufile := fmt.Sprintf("ufile.%05d", randValue)
+	file, err := os.OpenFile(ufile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
+	if err != nil {
+		log.Fatal("OpenFile", err)
+		return "error"
+	}
+	defer file.Close()
+	var i uint
+	for i = 0; i < num; i++ {
+		randKey := fmt.Sprintf("%s-%04d-%05d", key, randValue, i)
+		if _, err := file.Write([]byte("Append some data")); err != nil {
+			log.Fatal("Write file")
+		}
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
 			log.Fatal(err)
 		}
-		upload(serverURL, randKey, ptoken, *ufile)
-		umd5, err := md5sum(*ufile)
+		upload(serverURL, randKey, ptoken, ufile)
+		umd5, err := md5sum(ufile)
 		if err != nil {
 			log.Println("calc ufile md5 error: ", err)
 			break
@@ -140,9 +171,12 @@ func main() {
 		gtoken, err := token(serverURL, randKey, "get")
 		if err != nil {
 			log.Fatal(err)
+			break
 		}
-		download(serverURL, randKey, gtoken, *sfile)
-		dmd5, err := md5sum(*sfile)
+
+		sfile := fmt.Sprintf("sfile.%d", i)
+		download(serverURL, randKey, gtoken, sfile)
+		dmd5, err := md5sum(sfile)
 		if err != nil {
 			log.Println("calc sfile md5 error: ", err)
 			break
@@ -151,8 +185,35 @@ func main() {
 			log.Printf("checkmd5 failed  %s != %s", umd5, dmd5)
 		} else {
 			log.Printf("checkmd5 success %s == %s", umd5, dmd5)
+			os.Remove(sfile)
 		}
 
+	}
+	return "finish"
+}
+
+func main() {
+	host := flag.String("host", "localhost", "hostname")
+	port := flag.Int("port", 3000, "port")
+	key := flag.String("key", "key", "key")
+	ufile := flag.String("ufile", "filename", "upload filename")
+	sfile := flag.String("save", "filename", "save download filename")
+	num := flag.Uint("num", 1024, "upload/download times")
+	debug := flag.Bool("debug", false, "enable/disable debug mode")
+	ignore := flag.Bool("i", false, "ignore failed validation")
+
+	flag.Parse()
+
+	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
+	fmt.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
+	log.Printf("key:%s, ufile:%s, dfile:%s debug: %v, num:%d, ignore:%v\n", *key, *ufile, *sfile, *debug, *num, *ignore)
+
+	if *ufile != "filename" {
+		onlyUpload(serverURL, *key, *ufile)
+	} else if *key != "key" {
+		onlyDownload(serverURL, *key, *sfile)
+	} else {
+		validateUploadDownload(serverURL, *key, *num)
 	}
 
 }
