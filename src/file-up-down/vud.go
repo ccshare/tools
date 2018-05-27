@@ -31,6 +31,7 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 	log.Println(tokenURL)
 	tokenResp, err := http.Post(tokenURL, "application/json", strings.NewReader(""))
 	if err != nil {
+		fmt.Println(err)
 		log.Fatal(err)
 		return "", err
 	}
@@ -42,7 +43,7 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 		return "", err
 	}
 
-	log.Println(string(tokenBody), tokenResp.Status)
+	log.Printf("token: %s, statue: %s", string(tokenBody), tokenResp.Status)
 	token := tokenStruct{}
 	err = json.Unmarshal(tokenBody, &token)
 	if err != nil {
@@ -74,7 +75,7 @@ func upload(serverURL, entryKey, token, filename string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(string(postBody), postResp.Status)
+	log.Printf("uploadFinish: %s, status: %s", string(postBody), postResp.Status)
 	return
 }
 
@@ -97,6 +98,7 @@ func download(serverURL, entryKey, token, filename string) {
 
 	io.Copy(file, getResp.Body)
 	log.Println("Download finish ", filename, getResp.Status)
+	log.Printf("downloadFinish: %s, status: %s", filename, getResp.Status)
 	return
 }
 
