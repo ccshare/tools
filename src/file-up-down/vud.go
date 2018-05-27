@@ -1,5 +1,10 @@
 package main
 
+/*
+ * A commandline tool to upload/download and validate file
+ * 2018-05-27
+ */
+
 import (
 	"crypto/md5"
 	"encoding/json"
@@ -37,7 +42,7 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 		return "", err
 	}
 
-	log.Println(string(tokenBody))
+	log.Println(string(tokenBody), tokenResp.Status)
 	token := tokenStruct{}
 	err = json.Unmarshal(tokenBody, &token)
 	if err != nil {
@@ -69,7 +74,7 @@ func upload(serverURL, entryKey, token, filename string) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	log.Println(string(postBody))
+	log.Println(string(postBody), postResp.Status)
 	return
 }
 
@@ -89,9 +94,9 @@ func download(serverURL, entryKey, token, filename string) {
 		return
 	}
 	defer file.Close()
-	io.Copy(file, getResp.Body)
 
-	log.Println("Download finish ", filename)
+	io.Copy(file, getResp.Body)
+	log.Println("Download finish ", filename, getResp.Status)
 	return
 }
 
@@ -101,6 +106,8 @@ func md5sum(filename string) (string, error) {
 		fmt.Println(err)
 		return "", err
 	}
+	defer file.Close()
+
 	md5h := md5.New()
 	io.Copy(md5h, file)
 	fmd5 := fmt.Sprintf("%x", md5h.Sum([]byte("")))
@@ -155,6 +162,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint) 
 		return
 	}
 	defer file.Close()
+
 	var i uint
 	for i = 0; i < num; i++ {
 		randKey := fmt.Sprintf("%s-%08d", key, i)
@@ -163,11 +171,13 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint) 
 			log.Fatal("Write file", err)
 			break
 		}
+
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
 			log.Fatal(err)
 			break
 		}
+
 		upload(serverURL, randKey, ptoken, ufile)
 		umd5, err := md5sum(ufile)
 		if err != nil {
@@ -183,15 +193,16 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint) 
 
 		dfile := filepath.Join(dir, fmt.Sprintf("download-file.%d", i))
 		download(serverURL, randKey, gtoken, dfile)
+
 		dmd5, err := md5sum(dfile)
 		if err != nil {
-			log.Println("calc sfile md5 error: ", err)
+			log.Println("calc download file md5 error: ", err)
 			break
 		}
 		if umd5 != dmd5 {
-			log.Printf("checkmd5 failed  %s != %s", umd5, dmd5)
+			log.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
 		} else {
-			log.Printf("checkmd5 success %s == %s", umd5, dmd5)
+			log.Printf("checkmd5 %s success %s == %s", dfile, umd5, dmd5)
 			os.Remove(dfile)
 		}
 
@@ -234,14 +245,15 @@ func main() {
 	logFilename = filepath.Join(logdir, logFilename)
 	logFile, logErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if logErr != nil {
-		fmt.Println("Fail to find", *logFile, "cServer start Failed")
+		fmt.Println("Fail to OpenFile", logErr)
 		os.Exit(1)
 	}
+	defer logFile.Close()
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
-	fmt.Printf("server:%s, logfile:%s debug: %v, num:%d, ignore:%v\n", serverURL, logFilename, *debug, *num, *ignore)
+	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
 	log.Printf("server:%s, logfile:%s debug: %v, num:%d, ignore:%v\n", serverURL, logFilename, *debug, *num, *ignore)
 
 	if *ufile != "filename" {
