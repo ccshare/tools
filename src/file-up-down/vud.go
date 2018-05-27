@@ -191,7 +191,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint) 
 			break
 		}
 
-		dfile := filepath.Join(dir, fmt.Sprintf("download-file.%d", i))
+		dfile := filepath.Join(dir, fmt.Sprintf("download-file-%s.%d", key, i))
 		download(serverURL, randKey, gtoken, dfile)
 
 		dmd5, err := md5sum(dfile)
