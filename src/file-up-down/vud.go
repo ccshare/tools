@@ -252,7 +252,7 @@ func main() {
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+	log.SetFlags(log.Ldate | log.Lmicroseconds)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
 	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
