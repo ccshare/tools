@@ -32,14 +32,15 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 	tokenResp, err := http.Post(tokenURL, "application/json", strings.NewReader(""))
 	if err != nil {
 		fmt.Println(err)
-		log.Fatal(err)
+		log.Println(err)
 		return "", err
 	}
 
+	tokenResp.Close = true
 	defer tokenResp.Body.Close()
 	tokenBody, err := ioutil.ReadAll(tokenResp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return "", err
 	}
 
@@ -47,18 +48,19 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 	token := tokenStruct{}
 	err = json.Unmarshal(tokenBody, &token)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
 		return "", err
 	}
 
 	return token.Token, nil
 }
 
-func upload(serverURL, entryKey, token, filename string) {
+func upload(serverURL, entryKey, token, filename string) error {
 	file, err := os.Open(filename)
 	if err != nil {
-		log.Fatal(err)
-		return
+		fmt.Println(err)
+		log.Println(err)
+		return err
 	}
 	defer file.Close()
 
@@ -66,40 +68,43 @@ func upload(serverURL, entryKey, token, filename string) {
 	postURL := fmt.Sprintf("%s/pblocks/%s?token=%s", serverURL, entryKey, token)
 	postResp, err := http.Post(postURL, "application/octet-stream", file)
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Println(err)
+		return err
 	}
 
+	postResp.Close = true
 	defer postResp.Body.Close()
 	postBody, err := ioutil.ReadAll(postResp.Body)
 	if err != nil {
-		log.Fatal(err)
+		log.Println(err)
+		return err
 	}
 	log.Printf("uploadFinish: %s, status: %s", string(postBody), postResp.Status)
-	return
+	return err
 }
 
-func download(serverURL, entryKey, token, filename string) {
+func download(serverURL, entryKey, token, filename string) error {
 	// http://host:port/pblocks/$key?token=$token
 	getURL := fmt.Sprintf("%s/pblocks/%s?token=%s", serverURL, entryKey, token)
 	getResp, err := http.Get(getURL)
 	if err != nil {
-		log.Fatal(err)
-		return
+		fmt.Println(err)
+		log.Println(err)
+		return err
 	}
+	getResp.Close = true
 	defer getResp.Body.Close()
 
 	file, err := os.Create(filename)
 	if err != nil {
-		log.Fatal(err)
-		return
+		log.Println(err)
+		return err
 	}
 	defer file.Close()
 
 	io.Copy(file, getResp.Body)
-	log.Println("Download finish ", filename, getResp.Status)
 	log.Printf("downloadFinish: %s, status: %s", filename, getResp.Status)
-	return
+	return nil
 }
 
 func md5sum(filename string) (string, error) {
@@ -128,9 +133,13 @@ func onlyUpload(serverURL, key, filename string) {
 		log.Fatal(err)
 		return
 	}
-	upload(serverURL, fileKey, ptoken, filename)
+	if err := upload(serverURL, fileKey, ptoken, filename); err != nil {
+		log.Println("upload error: ", err)
+		fmt.Println("upload error: ", err)
+	} else {
+		fmt.Printf("file: %s \nkey : %s \nmd5 : %s\n", filename, fileKey, md5)
+	}
 
-	fmt.Printf("file: %s \nkey : %s \nmd5 : %s\n", filename, fileKey, md5)
 }
 
 func onlyDownload(serverURL, key, dir, filename string) {
@@ -145,16 +154,20 @@ func onlyDownload(serverURL, key, dir, filename string) {
 	} else {
 		dfile = filename
 	}
-	download(serverURL, key, gtoken, dfile)
-	md5, err := md5sum(dfile)
-	if err != nil {
-		log.Println("calc sfile md5 error: ", err)
-	}
+	if err := download(serverURL, key, gtoken, dfile); err != nil {
+		log.Println("download error: ", err)
+		fmt.Println("download error: ", err)
+	} else {
+		md5, err := md5sum(dfile)
+		if err != nil {
+			log.Println("calc sfile md5 error: ", err)
+		}
 
-	fmt.Printf("file: %s \nkey : %s \nmd5 : %s\n", dfile, key, md5)
+		fmt.Printf("file: %s \nkey : %s \nmd5 : %s\n", dfile, key, md5)
+	}
 }
 
-func validateUploadDownload(serverURL string, key string, dir string, num uint) {
+func validateUploadDownload(serverURL string, key string, dir string, num uint, ignore bool) {
 
 	ufile := filepath.Join(dir, fmt.Sprintf("upload-file.%s", key))
 
@@ -170,41 +183,82 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint) 
 		randKey := fmt.Sprintf("%s-%08d", key, i)
 		content := fmt.Sprintf("Just test file contents with( %s )\n", randKey)
 		if _, err := file.Write([]byte(content)); err != nil {
-			log.Fatal("Write file", err)
-			break
+			log.Println("Write file", err)
+			fmt.Println("Write file", err)
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		}
 
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
-			log.Fatal(err)
-			break
+			fmt.Println("put token: ", err)
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		}
 
-		upload(serverURL, randKey, ptoken, ufile)
+		if err := upload(serverURL, randKey, ptoken, ufile); err != nil {
+			fmt.Println("upload error: ", err)
+			if ignore {
+				continue
+			} else {
+				break
+			}
+		}
 		umd5, err := md5sum(ufile)
 		if err != nil {
 			log.Println("calc ufile md5 error: ", err)
-			break
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		}
 
 		gtoken, err := token(serverURL, randKey, "get")
 		if err != nil {
-			log.Fatal(err)
-			break
+			fmt.Println("get token: ", err)
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		}
 
 		dfile := filepath.Join(dir, fmt.Sprintf("download-file-%s.%d", key, i))
-		download(serverURL, randKey, gtoken, dfile)
+		if err := download(serverURL, randKey, gtoken, dfile); err != nil {
+			fmt.Println("download error: ", err)
+			if ignore {
+				continue
+			} else {
+				break
+			}
+		}
 
 		dmd5, err := md5sum(dfile)
 		if err != nil {
 			log.Println("calc download file md5 error: ", err)
-			break
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		}
 		if umd5 != dmd5 {
 			log.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
+			fmt.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
+			if ignore {
+				continue
+			} else {
+				break
+			}
 		} else {
-			log.Printf("checkmd5 %s success %s == %s", dfile, umd5, dmd5)
+			log.Printf("checkmd5 %s success %s", dfile, dmd5)
 			os.Remove(dfile)
 		}
 
@@ -264,7 +318,7 @@ func main() {
 		onlyDownload(serverURL, *key, datadir, *dfile)
 	} else {
 		randKey := fmt.Sprintf("%s-%04d", *key, randValue)
-		validateUploadDownload(serverURL, randKey, datadir, *num)
+		validateUploadDownload(serverURL, randKey, datadir, *num, *ignore)
 	}
 
 }
