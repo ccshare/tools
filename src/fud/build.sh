@@ -1,10 +1,10 @@
 #!/bin/sh
 
-project_name="vud"
-release_version="0.0.1"
+app_name="fud"
+app_version="1.0.1"
 
 release_dir=./release
-rm -rf $release_dir/*
+rm -rf $release_dir
 mkdir -p $release_dir
 
 cd  $(dirname $0)
@@ -16,17 +16,27 @@ for goos in "linux" "darwin" "windows"
 do
     if [ "$goos" = "windows" ]
     then
-      obj_name=$project_name.exe
+      obj_name=$app_name.exe
+      GOOS=$goos GOARCH=amd64 go build
+      zip $release_dir/$app_name-$goos-amd64-$app_version.zip $obj_name
+    elif [ "$goos" = "linux" ]
+    then
+      obj_name=$app_name
+      GOOS=$goos GOARCH=amd64 go build
+      zip $release_dir/$app_name-$goos-amd64-$app_version.zip $obj_name
+      GOOS=$goos GOARCH=arm go build
+      zip $release_dir/$app_name-$goos-arm-$app_version.zip $obj_name
+      GOOS=$goos GOARCH=arm64 go build
+      zip $release_dir/$app_name-$goos-arm64-$app_version.zip $obj_name
     else
-      obj_name=$project_name
+      obj_name=$app_name
+      GOOS=$goos GOARCH=amd64 go build
+      zip $release_dir/$app_name-$goos-amd64-$app_version.zip $obj_name
     fi
 
-    GOOS=$goos GOARCH=amd64 go build
-    zip $release_dir/$project_name-$goos-amd64.zip $obj_name
-    GOOS=$goos GOARCH=386 go build
-    zip $release_dir/$project_name-$goos-386.zip $obj_name
     rm -f $obj_name
 done
 
 cd $release_dir
 md5sum *.zip >> sha1sum.txt
+
