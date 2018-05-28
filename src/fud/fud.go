@@ -294,8 +294,8 @@ func main() {
 	}
 	logdir := filepath.Join(pwd, "log")
 	datadir := filepath.Join(pwd, "tmp")
-	_ = os.Mkdir(logdir, 0755)
-	_ = os.Mkdir(datadir, 0755)
+	_ = os.MkdirAll(logdir, 0755)
+	_ = os.MkdirAll(datadir, 0755)
 
 	rand.Seed(time.Now().Unix())
 	randValue := rand.Intn(99999)
