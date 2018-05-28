@@ -38,5 +38,5 @@ do
 done
 
 cd $release_dir
-md5sum *.zip >> sha1sum.txt
+sha1sum *.zip >> sha1sum.txt
 
