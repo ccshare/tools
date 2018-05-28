@@ -179,9 +179,11 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 	defer file.Close()
 
 	var i uint
+	var totalSize, fileSize uint = 0, 0
 	for i = 0; i < num; i++ {
-		randKey := fmt.Sprintf("%s-%08d", key, i)
-		content := fmt.Sprintf("Just test file contents with( %s )\n", randKey)
+		randKey := fmt.Sprintf("%s-%09d", key, i)
+		content := fmt.Sprintf("Just tests data injection with contents ( %s )\n", randKey)
+		fileSize += uint(len(content))
 		if _, err := file.Write([]byte(content)); err != nil {
 			log.Println("Write file", err)
 			fmt.Println("Write file", err)
@@ -210,6 +212,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 				break
 			}
 		}
+		totalSize += fileSize
 		umd5, err := md5sum(ufile)
 		if err != nil {
 			log.Println("calc ufile md5 error: ", err)
@@ -258,7 +261,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 				break
 			}
 		} else {
-			log.Printf("checkmd5 %s success %s", dfile, dmd5)
+			log.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
 			os.Remove(dfile)
 		}
 
@@ -295,9 +298,9 @@ func main() {
 	_ = os.Mkdir(datadir, 0755)
 
 	rand.Seed(time.Now().Unix())
-	randValue := rand.Intn(8192)
+	randValue := rand.Intn(99999)
 
-	logFilename := fmt.Sprintf("%s-%04d.log", os.Args[0], randValue)
+	logFilename := fmt.Sprintf("%s-%05d.log", os.Args[0], randValue)
 	logFilename = filepath.Join(logdir, logFilename)
 	logFile, logErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if logErr != nil {
@@ -317,7 +320,7 @@ func main() {
 	} else if *key != "key" {
 		onlyDownload(serverURL, *key, datadir, *dfile)
 	} else {
-		randKey := fmt.Sprintf("%s-%04d", *key, randValue)
+		randKey := fmt.Sprintf("%s-%05d", *key, randValue)
 		validateUploadDownload(serverURL, randKey, datadir, *num, *ignore)
 	}
 
