@@ -258,7 +258,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 		}
 		if umd5 != dmd5 {
 			log.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
-			fmt.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
+			fmt.Printf("checkmd5 %s failed  %s != %s\n", dfile, umd5, dmd5)
 			if ignore {
 				continue
 			} else {
