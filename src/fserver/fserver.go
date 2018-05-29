@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"math/rand"
 	"net/http"
@@ -14,14 +15,16 @@ import (
 )
 
 type tokenStruct struct {
-	Token string
-	Error bool
+	Token string `json:"name"`
+	Error bool   `json:"error"`
 }
 
 type pblockResult struct {
 	// {"result":"Upload completed"}
-	Result string
+	Result string `json:"result"`
 }
+
+var fileServer *FileServer
 
 func handleToken(w http.ResponseWriter, r *http.Request) {
 	// http://host:port/token?entryKey=$key&entryOp=put
@@ -35,7 +38,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 		if len(key) == 0 || len(op) == 0 {
 			token.Token = "error parameters"
 		} else if op[0] == "get" || op[0] == "put" {
-			respStr, err := Token(key[0], op[0])
+			respStr, err := fileServer.Token(key[0], op[0])
 			if err != nil {
 				token.Token = "gen token failed"
 			} else {
@@ -67,11 +70,22 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 			result.Result = "handle Get File, error parameters"
 		} else {
 			if r.Method == "GET" {
-				Download(keys[2])
-				w.Write([]byte("handle Get File"))
+				//w.Header("content-type", "application/octet-stream")
+				data, err := fileServer.Download(keys[2])
+				if err != nil {
+					w.WriteHeader(404)
+					w.Write([]byte("handle Get File failed"))
+				} else {
+					w.Write(data)
+				}
 				return
 			}
-			data, err := Upload(keys[2])
+			body, err := ioutil.ReadAll(r.Body)
+			if err != nil {
+				log.Println("Read req.Body", err)
+				return
+			}
+			data, err := fileServer.Upload(keys[2], body)
 			if err != nil {
 				result.Result = "Upload error"
 			} else {
@@ -99,7 +113,7 @@ func server(addr string, port int) error {
 func main() {
 	const VERSION = "version: 1.0.1"
 	address := flag.String("address", "0.0.0.0", "listen ip address")
-	port := flag.Int("port", 3003, "port")
+	port := flag.Int("port", 3000, "port")
 	db := flag.String("db", "cwd", "db path")
 	debug := flag.Bool("debug", false, "enable/disable debug mode")
 	ignore := flag.Bool("i", false, "ignore failed validation")
@@ -138,12 +152,14 @@ func main() {
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Lmicroseconds)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *address, *port)
 
 	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
 	log.Printf("server:%s, logfile:%s debug: %v, db:%s, ignore:%v\n", serverURL, logFilename, *debug, dbpath, *ignore)
+
+	fileServer = NewFileServer(dbpath)
 
 	server(*address, *port)
 

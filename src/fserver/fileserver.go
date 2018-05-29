@@ -4,8 +4,21 @@ import (
 	"log"
 )
 
+type FileServer struct {
+	fStore *FileStore
+}
+
+func NewFileServer(path string) *FileServer {
+	if path == "" {
+		return nil
+	}
+	fileStore := NewFileStore(path)
+
+	return &FileServer{fStore: fileStore}
+}
+
 // Token Generate Token
-func Token(key string, op string) (string, error) {
+func (fServer *FileServer) Token(key string, op string) (string, error) {
 	//
 	log.Printf("Get token")
 	retstr := "abcdefghijklmn"
@@ -13,17 +26,26 @@ func Token(key string, op string) (string, error) {
 }
 
 // Upload file
-func Upload(key string) (string, error) {
+func (fServer *FileServer) Upload(key string, value []byte) (string, error) {
 	//
-	log.Printf("upload file")
-	retstr := "Upload file result"
-	return retstr, nil
+	log.Printf("FileServer.Upload")
+	err := fServer.fStore.WriteDb(key, value)
+	if err != nil {
+		log.Println("FileServer.Upload", err)
+		return "Write DB failed", err
+	}
+	return "Upload success", nil
 }
 
 // Download file
-func Download(key string) (string, error) {
+func (fServer *FileServer) Download(key string) ([]byte, error) {
 	//
-	log.Printf("download file")
-	retstr := "Download file result"
-	return retstr, nil
+	log.Printf("FileServer.Download")
+	data, err := fServer.fStore.ReadDb(key)
+	if err != nil {
+		log.Println("ReadDb failed", err)
+		return []byte("Read DB error"), err
+	}
+
+	return data, nil
 }
