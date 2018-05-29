@@ -72,12 +72,12 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 			result.Result = "handle Get File, error parameters"
 		} else {
 			if r.Method == "GET" {
-				//w.Header("content-type", "application/octet-stream")
 				data, err := fileServer.Download(token[0], keys[2])
 				if err != nil {
 					w.WriteHeader(404)
 					w.Write([]byte("handle Get File failed"))
 				} else {
+					w.Header().Set("content-type", "application/octet-stream")
 					w.Write(data)
 				}
 				return
