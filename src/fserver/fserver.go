@@ -15,8 +15,7 @@ import (
 )
 
 type tokenStruct struct {
-	Token string `json:"name"`
-	Error bool   `json:"error"`
+	Token string `json:"token"`
 }
 
 type pblockResult struct {
@@ -29,31 +28,32 @@ var fileServer *FileServer
 func handleToken(w http.ResponseWriter, r *http.Request) {
 	// http://host:port/token?entryKey=$key&entryOp=put
 	// http://host:port/token?entryKey=$key&entryOp=get
-	token := tokenStruct{Error: true}
+	token := tokenStruct{}
 	if r.Method == "GET" || r.Method == "POST" {
 		r.ParseForm()
 		key := r.Form["entryKey"]
 		op := r.Form["entryOp"]
 
-		if len(key) == 0 || len(op) == 0 {
-			token.Token = "error parameters"
-		} else if op[0] == "get" || op[0] == "put" {
+		if len(key) == 1 && len(op) == 1 && (op[0] == "get" || op[0] == "put") {
 			respStr, err := fileServer.Token(key[0], op[0])
 			if err != nil {
+				w.WriteHeader(http.StatusInternalServerError)
 				token.Token = "gen token failed"
 			} else {
-				token.Error = false
 				token.Token = respStr
 			}
 		} else {
-			token.Token = "unknow op"
+			w.WriteHeader(http.StatusBadRequest)
+			token.Token = "unknow parameter"
 		}
 	} else {
+		w.WriteHeader(http.StatusNotImplemented)
 		token.Token = "Method not support"
 	}
 	jsdata, err := json.Marshal(token)
 	if err != nil {
 		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		w.Write(jsdata)
 	}
@@ -71,7 +71,7 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 		} else {
 			if r.Method == "GET" {
 				//w.Header("content-type", "application/octet-stream")
-				data, err := fileServer.Download(keys[2])
+				data, err := fileServer.Download(token[0], keys[2])
 				if err != nil {
 					w.WriteHeader(404)
 					w.Write([]byte("handle Get File failed"))
@@ -85,7 +85,7 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 				log.Println("Read req.Body", err)
 				return
 			}
-			data, err := fileServer.Upload(keys[2], body)
+			data, err := fileServer.Upload(token[0], keys[2], body)
 			if err != nil {
 				result.Result = "Upload error"
 			} else {
