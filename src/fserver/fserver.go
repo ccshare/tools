@@ -29,6 +29,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 	// http://host:port/token?entryKey=$key&entryOp=put
 	// http://host:port/token?entryKey=$key&entryOp=get
 	token := tokenStruct{}
+	defer r.Body.Close()
 	if r.Method == "GET" || r.Method == "POST" {
 		r.ParseForm()
 		key := r.Form["entryKey"]
@@ -62,6 +63,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 func handlePblocks(w http.ResponseWriter, r *http.Request) {
 	// http://host:port/pblocks/$key?token=$ptoken
 	result := pblockResult{}
+	defer r.Body.Close()
 	if r.Method == "GET" || r.Method == "POST" {
 		r.ParseForm()
 		keys := strings.Split(r.URL.Path, "/")
