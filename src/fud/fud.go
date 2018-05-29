@@ -29,6 +29,10 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 	// http://host:port/token?entryKey=$key&entryOp=put
 	tokenURL := fmt.Sprintf("%s/token?entryKey=%s&entryOp=%s", serverURL, entryKey, entryOp)
 	log.Println(tokenURL)
+	/* Maybe need a timeout control
+	timeout := time.Duration(60 * time.Second)
+	client := &http.Client{Timeout: timeout}
+	*/
 	tokenResp, err := http.Post(tokenURL, "application/json", strings.NewReader(""))
 	if err != nil {
 		fmt.Println(err)
@@ -309,7 +313,7 @@ func main() {
 	}
 	defer logFile.Close()
 	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Lmicroseconds)
+	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
 	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
