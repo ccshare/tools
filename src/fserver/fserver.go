@@ -91,7 +91,9 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 				} else {
 					data, err := fileServer.Upload(token[0], keys[2], body)
 					if err != nil {
+						w.WriteHeader(http.StatusInternalServerError)
 						result.Result = "Upload error"
+						fmt.Println("Upload error: ", err)
 					} else {
 						result.Result = data
 					}

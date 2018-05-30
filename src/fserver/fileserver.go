@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"log"
 	"math/rand"
 	"time"
@@ -8,7 +9,7 @@ import (
 
 // TOKEN_RANDOM_LEN length
 const tokenLen int = 24
-const tokenExpireTime = 60 * 1000 * 1000
+const tokenExpireTime = 6 * 1000 * 1000 * 1000
 
 var tokenLetters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ")
 
@@ -76,7 +77,8 @@ func (fServer *FileServer) validateToken(key, op string) (string, bool) {
 // Upload file
 func (fServer *FileServer) Upload(token, key string, value []byte) (string, error) {
 	if msg, valid := fServer.validateToken(token, "put"); valid == false {
-		return msg, nil
+		log.Println("invalid token: ", msg)
+		return msg, errors.New("invalid token")
 	}
 	log.Printf("FileServer.Upload: %s %s", token, key)
 	err := fServer.fStore.WriteDb(key, value)
@@ -90,6 +92,7 @@ func (fServer *FileServer) Upload(token, key string, value []byte) (string, erro
 // Download file
 func (fServer *FileServer) Download(token, key string) ([]byte, error) {
 	if msg, valid := fServer.validateToken(token, "get"); valid == false {
+		log.Println("invalid token: ", msg)
 		return []byte(msg), nil
 	}
 

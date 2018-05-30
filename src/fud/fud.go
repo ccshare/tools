@@ -8,6 +8,7 @@ package main
 import (
 	"crypto/md5"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -41,7 +42,12 @@ func token(serverURL string, entryKey string, entryOp string) (string, error) {
 	}
 
 	tokenResp.Close = true
-	defer tokenResp.Body.Close()
+	//defer tokenResp.Body.Close()
+	if tokenResp.StatusCode != 200 {
+		log.Println("Server error: ", tokenResp.Status)
+		return "", errors.New(tokenResp.Status)
+	}
+
 	tokenBody, err := ioutil.ReadAll(tokenResp.Body)
 	if err != nil {
 		log.Println(err)
@@ -77,14 +83,18 @@ func upload(serverURL, entryKey, token, filename string) error {
 	}
 
 	postResp.Close = true
-	defer postResp.Body.Close()
+	//defer postResp.Body.Close()
+	if postResp.StatusCode != 200 {
+		log.Println("Server error: ", postResp.Status)
+		return errors.New(postResp.Status)
+	}
 	postBody, err := ioutil.ReadAll(postResp.Body)
 	if err != nil {
 		log.Println(err)
 		return err
 	}
 	log.Printf("uploadFinish: %s, status: %s", string(postBody), postResp.Status)
-	return err
+	return nil
 }
 
 func download(serverURL, entryKey, token, filename string) error {
@@ -97,7 +107,11 @@ func download(serverURL, entryKey, token, filename string) error {
 		return err
 	}
 	getResp.Close = true
-	defer getResp.Body.Close()
+	//defer getResp.Body.Close()
+	if getResp.StatusCode != 200 {
+		log.Println("Server error: ", getResp.Status)
+		return errors.New(getResp.Status)
+	}
 
 	file, err := os.Create(filename)
 	if err != nil {
@@ -266,6 +280,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 			}
 		} else {
 			log.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
+			fmt.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
 			os.Remove(dfile)
 		}
 
