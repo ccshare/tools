@@ -31,10 +31,10 @@ func (fStore *FileStore) Exist(key string) (bool, error) {
 // WriteDb db
 func (fStore *FileStore) WriteDb(key string, value []byte) error {
 	//
-	log.Printf("write DB")
+	log.Printf("FileStore.WriteDb: %s", key)
 	err := fStore.db.Put([]byte(key), value, nil)
 	if err != nil {
-		log.Printf("db.Put error", err)
+		log.Println("db.Put error:", key, err)
 		return err
 	}
 	return nil
@@ -43,10 +43,10 @@ func (fStore *FileStore) WriteDb(key string, value []byte) error {
 // ReadDb file
 func (fStore *FileStore) ReadDb(key string) ([]byte, error) {
 	//
-	log.Printf("ReadDb DB")
+	log.Printf("FileStore.ReadDb: %s", key)
 	data, err := fStore.db.Get([]byte(key), nil)
 	if err != nil {
-		log.Printf("db.Get error", err)
+		log.Println("db.Get error:", key, err)
 		return []byte(""), err
 	}
 	return data, nil
@@ -55,10 +55,10 @@ func (fStore *FileStore) ReadDb(key string) ([]byte, error) {
 // DeleteDb file
 func (fStore *FileStore) DeleteDb(key string) error {
 	//
-	log.Printf("Delete DB")
+	log.Printf("FileStore.DeleteDb: %s", key)
 	err := fStore.db.Delete([]byte(key), nil)
 	if err != nil {
-		log.Printf("db.Delete error", err)
+		log.Println("db.Delete error:", key, err)
 		return err
 	}
 	return nil

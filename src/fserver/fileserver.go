@@ -46,7 +46,7 @@ func (fServer *FileServer) Token(key string, op string) (string, error) {
 		tokenID[i] = tokenLetters[rand.Intn(52)]
 	}
 	tokenStr := string(tokenID)
-	log.Printf("Gen token: %s", tokenStr)
+	log.Printf("Gen token: %s %s %s", key, op, tokenStr)
 	if _, exists := fServer.tokens[tokenStr]; exists {
 		log.Printf("token key[%s] already exist", tokenStr)
 	}
@@ -78,10 +78,10 @@ func (fServer *FileServer) Upload(token, key string, value []byte) (string, erro
 	if msg, valid := fServer.validateToken(token, "put"); valid == false {
 		return msg, nil
 	}
-	log.Printf("FileServer.Upload")
+	log.Printf("FileServer.Upload: %s %s", token, key)
 	err := fServer.fStore.WriteDb(key, value)
 	if err != nil {
-		log.Println("FileServer.Upload", err)
+		log.Println("WriteDb failed:", token, key, err)
 		return "Write DB failed", err
 	}
 	return "Upload success", nil
@@ -93,10 +93,10 @@ func (fServer *FileServer) Download(token, key string) ([]byte, error) {
 		return []byte(msg), nil
 	}
 
-	log.Printf("FileServer.Download")
+	log.Printf("FileServer.Download: %s %s", token, key)
 	data, err := fServer.fStore.ReadDb(key)
 	if err != nil {
-		log.Println("ReadDb failed", err)
+		log.Println("ReadDb failed:", token, key, err)
 		return []byte("Read DB error"), err
 	}
 
