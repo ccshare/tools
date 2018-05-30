@@ -3,6 +3,7 @@ package main
 import (
 	"encoding/json"
 	"flag"
+	"github.com/golang/glog"
 	"fmt"
 	"io/ioutil"
 	"log"
@@ -168,6 +169,13 @@ func main() {
 	defer logFile.Close()
 	log.SetOutput(logFile)
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
+
+	glog.Info("Start fserver [test glog info]")
+	glog.Warning("Start fserver [test glog warning]")
+	glog.Error("Start fserver [test glog error]")
+	glog.V(1).Infoln("level 1")
+	glog.V(2).Infoln("level 2")
+	defer glog.Flush()
 
 	serverURL := fmt.Sprintf("http://%s:%d", *address, *port)
 
