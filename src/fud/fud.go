@@ -280,7 +280,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 			}
 		} else {
 			log.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
-			fmt.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
+			fmt.Printf("checkmd5 %s success %s, totalSize: %d\n", dfile, dmd5, totalSize)
 			os.Remove(dfile)
 		}
 
