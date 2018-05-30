@@ -30,6 +30,15 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 	// http://host:port/token?entryKey=$key&entryOp=get
 	token := tokenStruct{}
 	defer r.Body.Close()
+	defer func() {
+		jsdata, err := json.Marshal(token)
+		if err != nil {
+			log.Println(err)
+			w.WriteHeader(http.StatusInternalServerError)
+		} else {
+			w.Write(jsdata)
+		}
+	}()
 	if r.Method == "GET" || r.Method == "POST" {
 		r.ParseForm()
 		key := r.Form["entryKey"]
@@ -51,13 +60,6 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusNotImplemented)
 		token.Token = "Method not support"
 	}
-	jsdata, err := json.Marshal(token)
-	if err != nil {
-		log.Println(err)
-		w.WriteHeader(http.StatusInternalServerError)
-	} else {
-		w.Write(jsdata)
-	}
 }
 
 func handlePblocks(w http.ResponseWriter, r *http.Request) {
@@ -75,27 +77,36 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 				data, err := fileServer.Download(token[0], keys[2])
 				if err != nil {
 					w.WriteHeader(404)
-					w.Write([]byte("handle Get File failed"))
+					result.Result = "handle Get File failed"
 				} else {
 					w.Header().Set("content-type", "application/octet-stream")
 					w.Write(data)
+					return
 				}
-				return
-			}
-			body, err := ioutil.ReadAll(r.Body)
-			if err != nil {
-				log.Println("Read req.Body", err)
-				return
-			}
-			data, err := fileServer.Upload(token[0], keys[2], body)
-			if err != nil {
-				result.Result = "Upload error"
 			} else {
-				result.Result = data
+				body, err := ioutil.ReadAll(r.Body)
+				if err != nil {
+					log.Println("Read req.Body", err)
+					result.Result = "read req body error"
+				} else {
+					data, err := fileServer.Upload(token[0], keys[2], body)
+					if err != nil {
+						result.Result = "Upload error"
+					} else {
+						result.Result = data
+					}
+				}
 			}
 		}
 	} else {
-		w.Write([]byte("not support"))
+		result.Result = "method not support"
+	}
+	jsdata, err := json.Marshal(result)
+	if err != nil {
+		log.Println(err)
+		w.WriteHeader(http.StatusInternalServerError)
+	} else {
+		w.Write(jsdata)
 	}
 }
 
