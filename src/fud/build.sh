@@ -1,7 +1,7 @@
 #!/bin/sh
 
 app_name="fud"
-app_version="1.0.1"
+app_version="1.0.2"
 
 release_dir=./release
 rm -rf $release_dir
@@ -19,6 +19,8 @@ do
       obj_name=$app_name.exe
       GOOS=$goos GOARCH=amd64 go build
       zip $release_dir/$app_name-$goos-amd64-$app_version.zip $obj_name
+      GOOS=$goos GOARCH=386 go build
+      zip $release_dir/$app_name-$goos-x86-$app_version.zip $obj_name
     elif [ "$goos" = "linux" ]
     then
       obj_name=$app_name

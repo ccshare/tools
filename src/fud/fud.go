@@ -274,7 +274,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 }
 
 func main() {
-	const VERSION = "version: 1.0.1"
+	const VERSION = "version: 1.0.2"
 	host := flag.String("host", "localhost", "hostname")
 	port := flag.Int("port", 3000, "port")
 	key := flag.String("key", "key", "key")
