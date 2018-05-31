@@ -6,13 +6,10 @@ import (
 	"github.com/golang/glog"
 	"fmt"
 	"io/ioutil"
-	"log"
-	"math/rand"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 )
 
 type tokenStruct struct {
@@ -34,7 +31,7 @@ func handleToken(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		jsdata, err := json.Marshal(token)
 		if err != nil {
-			log.Println(err)
+			glog.Infoln(err)
 			w.WriteHeader(http.StatusInternalServerError)
 		} else {
 			w.Write(jsdata)
@@ -87,7 +84,7 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 			} else {
 				body, err := ioutil.ReadAll(r.Body)
 				if err != nil {
-					log.Println("Read req.Body", err)
+					glog.Infoln("Read req.Body", err)
 					result.Result = "read req body error"
 				} else {
 					data, err := fileServer.Upload(token[0], keys[2], body)
@@ -106,7 +103,7 @@ func handlePblocks(w http.ResponseWriter, r *http.Request) {
 	}
 	jsdata, err := json.Marshal(result)
 	if err != nil {
-		log.Println(err)
+		glog.Infoln(err)
 		w.WriteHeader(http.StatusInternalServerError)
 	} else {
 		w.Write(jsdata)
@@ -120,9 +117,9 @@ func server(addr string, port int) error {
 	http.HandleFunc("/pblocks/", handlePblocks)
 	err := http.ListenAndServe(addrPort, nil)
 	if err != nil {
-		log.Println(err)
+		glog.Infoln(err)
+		return err
 	}
-
 	return nil
 }
 
@@ -146,44 +143,28 @@ func main() {
 		fmt.Println(err)
 		return
 	}
-	logdir := filepath.Join(pwd, "log")
 	var dbpath string
 	if *db == "cwd" {
 		dbpath = filepath.Join(pwd, "filestore")
 	} else {
 		dbpath = filepath.Join(*db, "filestore")
 	}
-	_ = os.MkdirAll(logdir, 0755)
 	_ = os.MkdirAll(dbpath, 0755)
 
-	rand.Seed(time.Now().Unix())
-	randValue := rand.Intn(1)
-
-	logFilename := fmt.Sprintf("%s-%05d.log", os.Args[0], randValue)
-	logFilename = filepath.Join(logdir, logFilename)
-	logFile, logErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
-	if logErr != nil {
-		fmt.Println("Fail to OpenFile", logErr)
-		os.Exit(1)
-	}
-	defer logFile.Close()
-	log.SetOutput(logFile)
-	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
-
-	glog.Info("Start fserver [test glog info]")
-	glog.Warning("Start fserver [test glog warning]")
-	glog.Error("Start fserver [test glog error]")
 	glog.V(1).Infoln("level 1")
 	glog.V(2).Infoln("level 2")
 	defer glog.Flush()
 
 	serverURL := fmt.Sprintf("http://%s:%d", *address, *port)
 
-	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
-	log.Printf("server:%s, logfile:%s debug: %v, db:%s, ignore:%v\n", serverURL, logFilename, *debug, dbpath, *ignore)
+	fmt.Printf("server:%s, debug: %v, db:%s, ignore:%v\n", serverURL, *debug, dbpath, *ignore)
+	glog.Info("server:%s, debug: %v, db:%s, ignore:%v", serverURL, *debug, dbpath, *ignore)
 
 	fileServer = NewFileServer(dbpath)
 
-	server(*address, *port)
+	if err := server(*address, *port); err != nil {
+		glog.Errorln("Start server: ", err)
+		os.Exit(1)
+	}
 
 }

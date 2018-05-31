@@ -2,7 +2,7 @@ package main
 
 import (
 	"errors"
-	"log"
+	"github.com/golang/glog"
 	"math/rand"
 	"time"
 )
@@ -47,9 +47,9 @@ func (fServer *FileServer) Token(key string, op string) (string, error) {
 		tokenID[i] = tokenLetters[rand.Intn(52)]
 	}
 	tokenStr := string(tokenID)
-	log.Printf("Gen token: %s %s %s", key, op, tokenStr)
+	glog.Infof("Gen token: %s %s %s", key, op, tokenStr)
 	if _, exists := fServer.tokens[tokenStr]; exists {
-		log.Printf("token key[%s] already exist", tokenStr)
+		glog.Infof("token key[%s] already exist", tokenStr)
 	}
 	fServer.tokens[tokenStr] = serverToken{operation: op, now: time.Now()}
 	return tokenStr, nil
@@ -77,13 +77,13 @@ func (fServer *FileServer) validateToken(key, op string) (string, bool) {
 // Upload file
 func (fServer *FileServer) Upload(token, key string, value []byte) (string, error) {
 	if msg, valid := fServer.validateToken(token, "put"); valid == false {
-		log.Println("invalid token: ", msg)
+		glog.Infoln("invalid token: ", msg)
 		return msg, errors.New("invalid token")
 	}
-	log.Printf("FileServer.Upload: %s %s", token, key)
+	glog.Infof("FileServer.Upload: %s %s", token, key)
 	err := fServer.fStore.WriteDb(key, value)
 	if err != nil {
-		log.Println("WriteDb failed:", token, key, err)
+		glog.Infoln("WriteDb failed:", token, key, err)
 		return "Write DB failed", err
 	}
 	return "Upload success", nil
@@ -92,14 +92,14 @@ func (fServer *FileServer) Upload(token, key string, value []byte) (string, erro
 // Download file
 func (fServer *FileServer) Download(token, key string) ([]byte, error) {
 	if msg, valid := fServer.validateToken(token, "get"); valid == false {
-		log.Println("invalid token: ", msg)
+		glog.Infoln("invalid token: ", msg)
 		return []byte(msg), nil
 	}
 
-	log.Printf("FileServer.Download: %s %s", token, key)
+	glog.Infof("FileServer.Download: %s %s", token, key)
 	data, err := fServer.fStore.ReadDb(key)
 	if err != nil {
-		log.Println("ReadDb failed:", token, key, err)
+		glog.Infoln("ReadDb failed:", token, key, err)
 		return []byte("Read DB error"), err
 	}
 

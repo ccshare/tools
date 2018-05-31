@@ -2,7 +2,7 @@ package main
 
 import (
 	"github.com/syndtr/goleveldb/leveldb"
-	"log"
+	"github.com/golang/glog"
 )
 
 type FileStore struct {
@@ -15,7 +15,7 @@ func NewFileStore(path string) *FileStore {
 	}
 	ldb, err := leveldb.OpenFile(path, nil)
 	if err != nil {
-		log.Println(err)
+		glog.Infoln(err)
 		return nil
 	}
 
@@ -31,10 +31,10 @@ func (fStore *FileStore) Exist(key string) (bool, error) {
 // WriteDb db
 func (fStore *FileStore) WriteDb(key string, value []byte) error {
 	//
-	log.Printf("FileStore.WriteDb: %s", key)
+	glog.Infof("FileStore.WriteDb: %s", key)
 	err := fStore.db.Put([]byte(key), value, nil)
 	if err != nil {
-		log.Println("db.Put error:", key, err)
+		glog.Infoln("db.Put error:", key, err)
 		return err
 	}
 	return nil
@@ -43,10 +43,10 @@ func (fStore *FileStore) WriteDb(key string, value []byte) error {
 // ReadDb file
 func (fStore *FileStore) ReadDb(key string) ([]byte, error) {
 	//
-	log.Printf("FileStore.ReadDb: %s", key)
+	glog.Infof("FileStore.ReadDb: %s", key)
 	data, err := fStore.db.Get([]byte(key), nil)
 	if err != nil {
-		log.Println("db.Get error:", key, err)
+		glog.Infoln("db.Get error:", key, err)
 		return []byte(""), err
 	}
 	return data, nil
@@ -55,10 +55,10 @@ func (fStore *FileStore) ReadDb(key string) ([]byte, error) {
 // DeleteDb file
 func (fStore *FileStore) DeleteDb(key string) error {
 	//
-	log.Printf("FileStore.DeleteDb: %s", key)
+	glog.Infof("FileStore.DeleteDb: %s", key)
 	err := fStore.db.Delete([]byte(key), nil)
 	if err != nil {
-		log.Println("db.Delete error:", key, err)
+		glog.Infoln("db.Delete error:", key, err)
 		return err
 	}
 	return nil
