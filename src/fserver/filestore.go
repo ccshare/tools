@@ -1,8 +1,8 @@
 package main
 
 import (
-	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/golang/glog"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 type FileStore struct {
