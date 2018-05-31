@@ -290,9 +290,9 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 
 func main() {
 	const VERSION = "version: 1.0.2"
-	host := flag.String("host", "127.0.0.1", "hostname")
-	port := flag.Int("port", 3000, "port")
-	key := flag.String("key", "key", "key")
+	host := flag.String("host", "127.0.0.1", "server address")
+	port := flag.Int("port", 3000, "server port")
+	key := flag.String("key", "key", "file key")
 	ufile := flag.String("ufile", "filename", "upload filename")
 	dfile := flag.String("dfile", "filename", "download filename")
 	num := flag.Uint("num", 1, "upload/download times")
