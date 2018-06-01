@@ -22,6 +22,9 @@ import (
 	"time"
 )
 
+var BuildDate = "Unknow Date"
+var Version = "1.0.3"
+
 type tokenStruct struct {
 	Token string
 }
@@ -289,7 +292,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 }
 
 func main() {
-	const VERSION = "version: 1.0.2"
+	var VERSION = fmt.Sprintf("Version: %s  build: %s", Version, BuildDate)
 	host := flag.String("host", "127.0.0.1", "server address")
 	port := flag.Int("port", 3000, "server port")
 	key := flag.String("key", "key", "file key")
