@@ -2,9 +2,10 @@ package main
 
 import (
 	"errors"
-	"github.com/golang/glog"
 	"math/rand"
 	"time"
+
+	"github.com/golang/glog"
 )
 
 // TOKEN_RANDOM_LEN length
@@ -29,6 +30,11 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+// Elapsed  for perf count
+func Elapsed(start time.Time, funcName string) {
+	glog.Infof("call %s took %f seconds", funcName, time.Since(start).Seconds())
+}
+
 // NewFileServer func
 func NewFileServer(path string) *FileServer {
 	if path == "" {
@@ -42,6 +48,7 @@ func NewFileServer(path string) *FileServer {
 // Token Generate Token
 func (fServer *FileServer) Token(key string, op string) (string, error) {
 	//
+	defer Elapsed(time.Now(), "FileServer.Token")
 	tokenID := make([]byte, tokenLen)
 	for i := 0; i < tokenLen; i++ {
 		tokenID[i] = tokenLetters[rand.Intn(52)]
@@ -76,6 +83,7 @@ func (fServer *FileServer) validateToken(key, op string) (string, bool) {
 
 // Upload file
 func (fServer *FileServer) Upload(token, key string, value []byte) (string, error) {
+	defer Elapsed(time.Now(), "FileServer.Upload")
 	if msg, valid := fServer.validateToken(token, "put"); valid == false {
 		glog.Infoln("invalid token: ", msg)
 		return msg, errors.New("invalid token")
@@ -91,6 +99,7 @@ func (fServer *FileServer) Upload(token, key string, value []byte) (string, erro
 
 // Download file
 func (fServer *FileServer) Download(token, key string) ([]byte, error) {
+	defer Elapsed(time.Now(), "FileServer.Download")
 	if msg, valid := fServer.validateToken(token, "get"); valid == false {
 		glog.Infoln("invalid token: ", msg)
 		return []byte(msg), nil
