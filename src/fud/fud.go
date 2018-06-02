@@ -170,7 +170,7 @@ func onlyDownload(serverURL, key, dir, filename string) {
 		return
 	}
 	var dfile string
-	if filename == "filename" {
+	if filename == "" {
 		dfile = filepath.Join(dir, fmt.Sprintf("file-%s.down", key))
 	} else {
 		dfile = filename
@@ -204,7 +204,6 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 	for i = 0; i < num; i++ {
 		randKey := fmt.Sprintf("%s-%09d", key, i)
 		content := fmt.Sprintf("Just tests data injection with contents ( %s )\n", randKey)
-		fileSize += uint(len(content))
 		if _, err := file.Write([]byte(content)); err != nil {
 			log.Println("Write file", err)
 			fmt.Println("Write file", err)
@@ -214,6 +213,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 				break
 			}
 		}
+		fileSize += uint(len(content))
 
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
@@ -254,7 +254,8 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 			}
 		}
 
-		dfile := filepath.Join(dir, fmt.Sprintf("download-file-%s.%d", key, i))
+		dname := fmt.Sprintf("download-file-%s.%d", key, i)
+		dfile := filepath.Join(dir, dname)
 		if err := download(serverURL, randKey, gtoken, dfile); err != nil {
 			fmt.Println("download error: ", err)
 			if ignore {
@@ -273,17 +274,18 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 				break
 			}
 		}
+
 		if umd5 != dmd5 {
-			log.Printf("checkmd5 %s failed  %s != %s", dfile, umd5, dmd5)
-			fmt.Printf("checkmd5 %s failed  %s != %s\n", dfile, umd5, dmd5)
+			log.Printf("checkmd5 %s failed  %s != %s", dname, umd5, dmd5)
+			fmt.Printf("checkmd5 %s failed  %s != %s\n", dname, umd5, dmd5)
 			if ignore {
 				continue
 			} else {
 				break
 			}
 		} else {
-			log.Printf("checkmd5 %s success %s, totalSize: %d", dfile, dmd5, totalSize)
-			fmt.Printf("checkmd5 %s success %s, totalSize: %d\n", dfile, dmd5, totalSize)
+			log.Printf("check %s md5 %s success, filesize: %d, totalSize: %d", dname, dmd5, fileSize, totalSize)
+			fmt.Printf("check %s md5 %s success, filesize: %d, totalSize: %d\n", dname, dmd5, fileSize, totalSize)
 			os.Remove(dfile)
 		}
 
@@ -296,16 +298,15 @@ func main() {
 	host := flag.String("host", "127.0.0.1", "server address")
 	port := flag.Int("port", 3000, "server port")
 	key := flag.String("key", "key", "file key")
-	ufile := flag.String("ufile", "filename", "upload filename")
-	dfile := flag.String("dfile", "filename", "download filename")
+	ufile := flag.String("ufile", "", "upload filename")
+	dfile := flag.String("dfile", "", "download save filename")
 	num := flag.Uint("num", 1, "upload/download times")
-	debug := flag.Bool("debug", false, "enable/disable debug mode")
 	ignore := flag.Bool("i", false, "ignore failed validation")
 	version := flag.Bool("version", false, "show version")
 
 	flag.Parse()
 	if *version == true {
-		fmt.Printf("%s  %s\n", os.Args[0], VERSION)
+		fmt.Printf("%s  %s\n", filepath.Base(os.Args[0]), VERSION)
 		return
 	}
 
@@ -322,7 +323,7 @@ func main() {
 	rand.Seed(time.Now().Unix())
 	randValue := rand.Intn(99999)
 
-	logFilename := fmt.Sprintf("%s-%05d.log", os.Args[0], randValue)
+	logFilename := fmt.Sprintf("%s-%05d.log", filepath.Base(os.Args[0]), randValue)
 	logFilename = filepath.Join(logdir, logFilename)
 	logFile, logErr := os.OpenFile(logFilename, os.O_CREATE|os.O_RDWR|os.O_APPEND, 0666)
 	if logErr != nil {
@@ -334,10 +335,10 @@ func main() {
 	log.SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 
 	serverURL := fmt.Sprintf("http://%s:%d", *host, *port)
-	fmt.Printf("server:%s, logfile:%s\n", serverURL, logFilename)
-	log.Printf("server:%s, logfile:%s debug: %v, num:%d, ignore:%v\n", serverURL, logFilename, *debug, *num, *ignore)
+	fmt.Printf("server: %s, logfile: %s\n", serverURL, logFilename)
+	log.Printf("server: %s, logfile: %s, num: %d, ignore: %v\n", serverURL, logFilename, *num, *ignore)
 
-	if *ufile != "filename" {
+	if *ufile != "" {
 		onlyUpload(serverURL, *key, *ufile)
 	} else if *key != "key" {
 		onlyDownload(serverURL, *key, datadir, *dfile)
