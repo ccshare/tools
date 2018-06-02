@@ -171,7 +171,7 @@ func onlyDownload(serverURL, key, dir, filename string) {
 	}
 	var dfile string
 	if filename == "" {
-		dfile = filepath.Join(dir, fmt.Sprintf("file-%s.down", key))
+		dfile = filepath.Join(dir, fmt.Sprintf("download-%s", key))
 	} else {
 		dfile = filename
 	}
