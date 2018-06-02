@@ -22,7 +22,10 @@ import (
 	"time"
 )
 
+// BuildDate to record build date
 var BuildDate = "Unknow Date"
+
+// Version to record build bersion
 var Version = "1.0.3"
 
 type tokenStruct struct {
