@@ -190,7 +190,7 @@ func onlyDownload(serverURL, key, dir, filename string) {
 
 func validateUploadDownload(serverURL string, key string, dir string, num uint, ignore bool) {
 
-	ufile := filepath.Join(dir, fmt.Sprintf("upload-file.%s", key))
+	ufile := filepath.Join(dir, fmt.Sprintf("upload-%s", key))
 
 	file, err := os.OpenFile(ufile, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0644)
 	if err != nil {
@@ -218,6 +218,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 		ptoken, err := token(serverURL, randKey, "put")
 		if err != nil {
 			fmt.Println("put token: ", err)
+			log.Println("put token: ", err)
 			if ignore {
 				continue
 			} else {
@@ -227,6 +228,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 
 		if err := upload(serverURL, randKey, ptoken, ufile); err != nil {
 			fmt.Println("upload error: ", err)
+			log.Println("upload error: ", err)
 			if ignore {
 				continue
 			} else {
@@ -236,6 +238,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 		totalSize += fileSize
 		umd5, err := md5sum(ufile)
 		if err != nil {
+			fmt.Println("calc ufile md5 error: ", err)
 			log.Println("calc ufile md5 error: ", err)
 			if ignore {
 				continue
@@ -247,6 +250,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 		gtoken, err := token(serverURL, randKey, "get")
 		if err != nil {
 			fmt.Println("get token: ", err)
+			log.Println("get token: ", err)
 			if ignore {
 				continue
 			} else {
@@ -254,10 +258,11 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 			}
 		}
 
-		dname := fmt.Sprintf("download-file-%s.%d", key, i)
+		dname := fmt.Sprintf("download-%s", randKey)
 		dfile := filepath.Join(dir, dname)
 		if err := download(serverURL, randKey, gtoken, dfile); err != nil {
 			fmt.Println("download error: ", err)
+			log.Println("download error: ", err)
 			if ignore {
 				continue
 			} else {
@@ -267,6 +272,7 @@ func validateUploadDownload(serverURL string, key string, dir string, num uint, 
 
 		dmd5, err := md5sum(dfile)
 		if err != nil {
+			fmt.Println("calc download file md5 error: ", err)
 			log.Println("calc download file md5 error: ", err)
 			if ignore {
 				continue
