@@ -32,7 +32,7 @@ func init() {
 
 // Elapsed  for perf count
 func Elapsed(start time.Time, funcName string) {
-	glog.Infof("call %s took %f seconds", funcName, time.Since(start).Seconds())
+	glog.V(1).Infof("%s took %f seconds", funcName, time.Since(start).Seconds())
 }
 
 // NewFileServer func
@@ -54,7 +54,7 @@ func (fServer *FileServer) Token(key string, op string) (string, error) {
 		tokenID[i] = tokenLetters[rand.Intn(52)]
 	}
 	tokenStr := string(tokenID)
-	glog.Infof("Gen token: %s %s %s", key, op, tokenStr)
+	glog.Infof("Gen %s token: %s %s", op, key, tokenStr)
 	if _, exists := fServer.tokens[tokenStr]; exists {
 		glog.Infof("token key[%s] already exist", tokenStr)
 	}

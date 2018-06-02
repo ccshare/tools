@@ -5,10 +5,12 @@ import (
 	"github.com/syndtr/goleveldb/leveldb"
 )
 
+//FileStore Presenting a FileStore type
 type FileStore struct {
 	db *leveldb.DB
 }
 
+// NewFileStore constructor
 func NewFileStore(path string) *FileStore {
 	if "" == path {
 		return nil

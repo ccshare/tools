@@ -4,12 +4,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"github.com/golang/glog"
 	"io/ioutil"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/golang/glog"
 )
 
 type tokenStruct struct {
@@ -117,7 +118,6 @@ func server(addr string, port int) error {
 	http.HandleFunc("/pblocks/", handlePblocks)
 	err := http.ListenAndServe(addrPort, nil)
 	if err != nil {
-		glog.Infoln(err)
 		return err
 	}
 	return nil
@@ -127,14 +127,12 @@ func main() {
 	const VERSION = "version: 1.0.1"
 	address := flag.String("address", "0.0.0.0", "listen ip address")
 	port := flag.Int("port", 3000, "port")
-	db := flag.String("db", "cwd", "db path")
-	debug := flag.Bool("debug", false, "enable/disable debug mode")
-	ignore := flag.Bool("i", false, "ignore failed validation")
+	db := flag.String("db", "", "db path(default cwd/filestore)")
 	version := flag.Bool("version", false, "show version")
 
 	flag.Parse()
 	if *version == true {
-		fmt.Printf("%s  %s\n", os.Args[0], VERSION)
+		fmt.Printf("%s  %s\n", filepath.Base(os.Args[0]), VERSION)
 		return
 	}
 
@@ -144,26 +142,28 @@ func main() {
 		return
 	}
 	var dbpath string
-	if *db == "cwd" {
+	if *db == "" {
 		dbpath = filepath.Join(pwd, "filestore")
 	} else {
 		dbpath = filepath.Join(*db, "filestore")
 	}
 	_ = os.MkdirAll(dbpath, 0755)
 
-	glog.V(1).Infoln("level 1")
-	glog.V(2).Infoln("level 2")
+	glog.V(1).Infoln("level 1 for perf coutn")
+	glog.V(2).Infoln("level 2 for debug")
 	defer glog.Flush()
 
 	serverURL := fmt.Sprintf("http://%s:%d", *address, *port)
 
-	fmt.Printf("server:%s, debug: %v, db:%s, ignore:%v\n", serverURL, *debug, dbpath, *ignore)
-	glog.Info("server:%s, debug: %v, db:%s, ignore:%v", serverURL, *debug, dbpath, *ignore)
+	fmt.Printf("server: %s\n", serverURL)
+	fmt.Printf("db    : %s\n", dbpath)
+	glog.Infof("server: %s, db: %s", serverURL, dbpath)
 
 	fileServer = NewFileServer(dbpath)
 
 	if err := server(*address, *port); err != nil {
 		glog.Errorln("Start server: ", err)
+		fmt.Println("start server error: ", err)
 		os.Exit(1)
 	}
 
