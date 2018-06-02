@@ -26,8 +26,11 @@ func NewFileStore(path string) *FileStore {
 
 // Exist a key
 func (fStore *FileStore) Exist(key string) (bool, error) {
-	//
-	return true, nil
+	if key == "" {
+		return false, nil
+	} else {
+		return true, nil
+	}
 }
 
 // WriteDb db
