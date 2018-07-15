@@ -25,6 +25,7 @@ const fileStoreName = "myshare-filestore"
 const contractManager = "myshare-contract-manager"
 const lsName = "lsdata"
 const rsName = "rsdata"
+const cmNum = 2
 
 func printUsage(inspectCmd *flag.FlagSet, testCmd *flag.FlagSet) {
 	flag.Usage()
@@ -55,6 +56,10 @@ func internalKey(key string) string {
 	return fmt.Sprintf("%x", hash.Sum(nil))
 }
 
+func getChunkKeyByIndex(key string, index int) string {
+	return fmt.Sprintf("%s-%06d", key, index)
+}
+
 func printContract(contract *Contract) {
 	fmt.Printf("%v", contract)
 }
@@ -64,7 +69,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 	cmRoot := filepath.Join(*root, contractManager)
 	lsRoot := filepath.Join(fileStoreRoot, lsName)
 	rsRoot := filepath.Join(fileStoreRoot, rsName)
-	blockKey := internalKey(*key)
+	inKey := internalKey(*key)
 
 	cmDb, err := leveldb.OpenFile(cmRoot, nil)
 	if err != nil {
@@ -73,7 +78,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 	}
 	defer cmDb.Close()
 
-	cdata, err := cmDb.Get([]byte(blockKey), nil)
+	cdata, err := cmDb.Get([]byte(inKey), nil)
 	if err != nil {
 		fmt.Println("not find contract", err)
 	}
@@ -96,7 +101,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 		 * path: 123/456/789/85a0aa21c23f5abd2975a89b682abcd
 		 */
 
-		filename := filepath.Join(rsRoot, blockKey[0:2], blockKey[3:5], blockKey[6:8], blockKey[9:])
+		filename := filepath.Join(rsRoot, inKey[0:2], inKey[3:5], inKey[6:8], inKey[9:])
 		fd, err := os.Open(filename)
 		if err != nil {
 			log.Fatal(err)
@@ -110,14 +115,14 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 
 		fmt.Println("Data information:")
 		fmt.Println("  store       : RS")
-		fmt.Println("  internal Key: ", blockKey)
+		fmt.Println("  internal Key: ", inKey)
 		fmt.Println("  path        : ", filename)
 		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
 	} else {
 		// getDB index get DB from key
-		index := int(blockKey[0]) % 2
-		fmt.Println("lsDB key index", blockKey, index)
-		dbPath := filepath.Join(lsRoot, strconv.Itoa(index))
+		dbIndex := int(inKey[0]) % cmNum
+		fmt.Println("lsDB key index", inKey, dbIndex)
+		dbPath := filepath.Join(lsRoot, strconv.Itoa(dbIndex))
 		fmt.Println("Real db path: ", dbPath)
 
 		lsDb, err := leveldb.OpenFile(cmRoot, nil)
@@ -127,18 +132,24 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 		}
 		defer lsDb.Close()
 
-		ldata, err := lsDb.Get([]byte(blockKey), nil)
-		if err != nil {
-			fmt.Println("not find contract", err)
-		}
+		chunkIndex := 0
 		hash := sha256.New()
-		hash.Write(ldata)
+		for {
+			chunkKey := getChunkKeyByIndex(inKey, chunkIndex)
+			ldata, err := lsDb.Get([]byte(chunkKey), nil)
+			if err != nil {
+				fmt.Println("not find block in db", err)
+				break
+			}
+			hash.Write(ldata)
+			chunkIndex++
+		}
 
 		fmt.Println("Data information:")
 		fmt.Println("  store        : LS")
-		fmt.Println("  internal Key : ", blockKey)
-		fmt.Println("  CM index     : ", index)
-		fmt.Println("  Chunk number : ", 1)
+		fmt.Println("  internal Key : ", inKey)
+		fmt.Println("  CM index     : ", dbIndex)
+		fmt.Println("  Chunk number : ", chunkIndex)
 		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
 	}
 
