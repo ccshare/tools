@@ -25,7 +25,6 @@ const fileStoreName = "myshare-filestore"
 const contractManager = "myshare-contract-manager"
 const lsName = "lsdata"
 const rsName = "rsdata"
-const cmNum = 2
 
 func printUsage(inspectCmd *flag.FlagSet, testCmd *flag.FlagSet) {
 	flag.Usage()
@@ -64,7 +63,7 @@ func printContract(contract *Contract) {
 	fmt.Printf("%v", contract)
 }
 
-func inspect(root *string, key *string, sizeThreshold *int) {
+func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	fileStoreRoot := filepath.Join(*root, fileStoreName)
 	cmRoot := filepath.Join(*root, contractManager)
 	lsRoot := filepath.Join(fileStoreRoot, lsName)
@@ -95,7 +94,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 		return
 	}
 
-	if contract.Size > *sizeThreshold {
+	if contract.Size > sizeThreshold {
 		/**
 		 * key : 12345678985a0aa21c23f5abd2975a89b682abcd
 		 * path: 123/456/789/85a0aa21c23f5abd2975a89b682abcd
@@ -113,7 +112,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 			log.Fatal(err)
 		}
 
-		fmt.Println("Data information:")
+		fmt.Println("Block information:")
 		fmt.Println("  store       : RS")
 		fmt.Println("  internal Key: ", inKey)
 		fmt.Println("  path        : ", filename)
@@ -145,7 +144,7 @@ func inspect(root *string, key *string, sizeThreshold *int) {
 			chunkIndex++
 		}
 
-		fmt.Println("Data information:")
+		fmt.Println("Block information:")
 		fmt.Println("  store        : LS")
 		fmt.Println("  internal Key : ", inKey)
 		fmt.Println("  CM index     : ", dbIndex)
@@ -164,6 +163,7 @@ func main() {
 	inspectKey := inspectCmd.String("key", "", "Block key")
 	inspectRoot := inspectCmd.String("root", "", "Data root dir")
 	inspectSize := inspectCmd.Int("size", 102400, "Block size threshold")
+	inspectCmnum := inspectCmd.Int("cm", 2, "CM number")
 
 	testCmd := flag.NewFlagSet("test", flag.ExitOnError)
 	testApp := testCmd.String("app", "", "test command")
@@ -190,13 +190,14 @@ func main() {
 			fmt.Println("Please supply the root using -root option.")
 			os.Exit(3)
 		}
-		fmt.Printf("You asked: %q  %q %q\n", *inspectKey, *inspectRoot, *inspectSize)
+		fmt.Printf("Asked: %q %q %q %q\n", *inspectKey, *inspectRoot, *inspectSize, *inspectCmnum)
+		inspect(inspectRoot, inspectKey, *inspectSize, *inspectCmnum)
 	} else if testCmd.Parsed() {
 		if *testApp == "" {
 			fmt.Println("Please supply the user using -user option.")
 			os.Exit(2)
 		}
-		fmt.Printf("You asked: %q\n", *testApp)
+		fmt.Printf("Asked: %q\n", *testApp)
 	} else { // if flag.Parsed()
 		if true == *version {
 			fmt.Printf("%s  %s\n", filepath.Base(os.Args[0]), VERSION)
