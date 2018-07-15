@@ -1,10 +1,18 @@
 package main
 
 import (
+	"crypto/sha1"
+	"crypto/sha256"
+	"encoding/json"
 	"flag"
 	"fmt"
+	"io"
+	"log"
 	"os"
 	"path/filepath"
+	"strconv"
+
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // BuildDate to record build date
@@ -13,17 +21,127 @@ var BuildDate = "Unknow Date"
 // Version to record build bersion
 var Version = "1.0.1"
 
-func printUsage() {
-	fmt.Printf("usage: %s [args] <command> [<args>]\n", os.Args[0])
-	fmt.Printf("%s args:\n", os.Args[0])
-	fmt.Println("  -help     Print this help page")
-	fmt.Println("  -version  Print version")
-	fmt.Println("commands: ")
-	fmt.Println("  inspect   Inspcet info")
-	fmt.Println("     -key   Object key")
-	fmt.Println("     -root  Data root dir")
-	fmt.Println("  test      Test command")
-	fmt.Println("     -app      Test command name")
+const fileStoreName = "myshare-filestore"
+const contractManager = "myshare-contract-manager"
+const lsName = "lsdata"
+const rsName = "rsdata"
+
+func printUsage(inspectCmd *flag.FlagSet, testCmd *flag.FlagSet) {
+	flag.Usage()
+	fmt.Println("  inspect")
+	fmt.Println("        Inspect infomation")
+	fmt.Println("  test")
+	fmt.Println("        Test command")
+	inspectCmd.Usage()
+	testCmd.Usage()
+}
+
+// Contract struct
+type Contract struct {
+	Version        int    `json:"version"`
+	Fiber          string `json:"fiber"`
+	Miner          string `json:"miner"`
+	MinerFootprint string `json:"minerFootprint"`
+	Hash           string `json:"hash"`
+	Size           int    `json:"size"`
+	LeaseBegin     bool   `json:"leaseBegin"`
+	LeaseEnd       bool   `json:"leaseEnd"`
+	Status         string `json:"status"`
+}
+
+func internalKey(key string) string {
+	hash := sha1.New()
+	hash.Write([]byte(key))
+	return fmt.Sprintf("%x", hash.Sum(nil))
+}
+
+func printContract(contract *Contract) {
+	fmt.Printf("%v", contract)
+}
+
+func inspect(root *string, key *string, sizeThreshold *int) {
+	fileStoreRoot := filepath.Join(*root, fileStoreName)
+	cmRoot := filepath.Join(*root, contractManager)
+	lsRoot := filepath.Join(fileStoreRoot, lsName)
+	rsRoot := filepath.Join(fileStoreRoot, rsName)
+	blockKey := internalKey(*key)
+
+	cmDb, err := leveldb.OpenFile(cmRoot, nil)
+	if err != nil {
+		fmt.Println("Open leveldb error: ", err)
+		return
+	}
+	defer cmDb.Close()
+
+	cdata, err := cmDb.Get([]byte(blockKey), nil)
+	if err != nil {
+		fmt.Println("not find contract", err)
+	}
+
+	contract := Contract{}
+	if err := json.Unmarshal(cdata, &contract); err != nil {
+		fmt.Println("decode contract error: ", err)
+		return
+	}
+
+	printContract(&contract)
+	if contract.Status != "MINER_USED" {
+		fmt.Println("Invalid constract status: ", contract.Status)
+		return
+	}
+
+	if contract.Size > *sizeThreshold {
+		/**
+		 * key : 12345678985a0aa21c23f5abd2975a89b682abcd
+		 * path: 123/456/789/85a0aa21c23f5abd2975a89b682abcd
+		 */
+
+		filename := filepath.Join(rsRoot, blockKey[0:2], blockKey[3:5], blockKey[6:8], blockKey[9:])
+		fd, err := os.Open(filename)
+		if err != nil {
+			log.Fatal(err)
+		}
+		defer fd.Close()
+
+		hash := sha256.New()
+		if _, err := io.Copy(hash, fd); err != nil {
+			log.Fatal(err)
+		}
+
+		fmt.Println("Data information:")
+		fmt.Println("  store       : RS")
+		fmt.Println("  internal Key: ", blockKey)
+		fmt.Println("  path        : ", filename)
+		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
+	} else {
+		// getDB index get DB from key
+		index := int(blockKey[0]) % 2
+		fmt.Println("lsDB key index", blockKey, index)
+		dbPath := filepath.Join(lsRoot, strconv.Itoa(index))
+		fmt.Println("Real db path: ", dbPath)
+
+		lsDb, err := leveldb.OpenFile(cmRoot, nil)
+		if err != nil {
+			fmt.Println("Open leveldb error: ", err)
+			return
+		}
+		defer lsDb.Close()
+
+		ldata, err := lsDb.Get([]byte(blockKey), nil)
+		if err != nil {
+			fmt.Println("not find contract", err)
+		}
+		hash := sha256.New()
+		hash.Write(ldata)
+
+		fmt.Println("Data information:")
+		fmt.Println("  store        : LS")
+		fmt.Println("  internal Key : ", blockKey)
+		fmt.Println("  CM index     : ", index)
+		fmt.Println("  Chunk number : ", 1)
+		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
+	}
+
 }
 
 func main() {
@@ -32,14 +150,15 @@ func main() {
 	help := flag.Bool("help", false, "Output help page")
 
 	inspectCmd := flag.NewFlagSet("inspect", flag.ExitOnError)
-	inspectKey := inspectCmd.String("key", "", "file key")
-	inspectRoot := inspectCmd.String("root", "", "data root dir")
+	inspectKey := inspectCmd.String("key", "", "Block key")
+	inspectRoot := inspectCmd.String("root", "", "Data root dir")
+	inspectSize := inspectCmd.Int("size", 102400, "Block size threshold")
 
 	testCmd := flag.NewFlagSet("test", flag.ExitOnError)
 	testApp := testCmd.String("app", "", "test command")
 
 	if len(os.Args) < 2 {
-		printUsage()
+		printUsage(inspectCmd, testCmd)
 		os.Exit(1)
 	}
 
@@ -60,7 +179,7 @@ func main() {
 			fmt.Println("Please supply the root using -root option.")
 			os.Exit(3)
 		}
-		fmt.Printf("You asked: %q  %q\n", *inspectKey, *inspectRoot)
+		fmt.Printf("You asked: %q  %q %q\n", *inspectKey, *inspectRoot, *inspectSize)
 	} else if testCmd.Parsed() {
 		if *testApp == "" {
 			fmt.Println("Please supply the user using -user option.")
@@ -71,10 +190,10 @@ func main() {
 		if true == *version {
 			fmt.Printf("%s  %s\n", filepath.Base(os.Args[0]), VERSION)
 		} else if true == *help {
-			printUsage()
+			printUsage(inspectCmd, testCmd)
 		} else {
 			fmt.Println("Unknow args ...")
-			printUsage()
+			printUsage(inspectCmd, testCmd)
 		}
 	}
 }
