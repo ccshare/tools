@@ -45,8 +45,8 @@ type Contract struct {
 	MinerFootprint string `json:"minerFootprint"`
 	Hash           string `json:"hash"`
 	Size           int    `json:"size"`
-	LeaseBegin     bool   `json:"leaseBegin"`
-	LeaseEnd       bool   `json:"leaseEnd"`
+	LeaseBegin     string `json:"leaseBegin"`
+	LeaseEnd       string `json:"leaseEnd"`
 	Status         string `json:"status"`
 }
 
@@ -68,10 +68,6 @@ func getCmIndexFromKey(key string, cm int) (int, error) {
 	return int(decoded[0]) % cm, nil
 }
 
-func printContract(contract *Contract) {
-	fmt.Printf("%v", contract)
-}
-
 func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	fileStoreRoot := filepath.Join(*root, fileStoreName)
 	cmRoot := filepath.Join(*root, contractManager)
@@ -86,20 +82,27 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	}
 	defer cmDb.Close()
 
-	cdata, err := cmDb.Get([]byte(inKey), nil)
+	cdata, err := cmDb.Get([]byte(*key), nil)
 	if err != nil {
-		fmt.Println("not find contract", err)
+		fmt.Println("not find contract", inKey, err)
+		return
 	}
 
 	contract := Contract{}
 	if err := json.Unmarshal(cdata, &contract); err != nil {
 		fmt.Println("decode contract error: ", err)
+		return
 	}
 
-	printContract(&contract)
+	fmt.Printf("Contract information:\n")
+	fmt.Printf("  hash      : %s\n", contract.Hash)
+	fmt.Printf("  size      : %d\n", contract.Size)
+	fmt.Printf("  leaseBegin: %s\n", contract.LeaseBegin)
+	fmt.Printf("  leaseEnd  : %s\n", contract.LeaseEnd)
+	fmt.Printf("  status    : %s\n", contract.Status)
 	if contract.Status != "MINER_USED" {
 		fmt.Println("Invalid constract status: ", contract.Status)
-		contract.Size = sizeThreshold - 2
+		return
 	}
 
 	if contract.Size > sizeThreshold {
@@ -120,10 +123,10 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 		}
 
 		fmt.Printf("Block information:\n")
-		fmt.Printf("  store : RS\n")
-		fmt.Printf("  inKey : %s\n", inKey)
-		fmt.Printf("  path  : %s\n", filename)
-		fmt.Printf("  hash  : %x\n", hash.Sum(nil))
+		fmt.Printf("  store     : RS\n")
+		fmt.Printf("  inKey     : %s\n", inKey)
+		fmt.Printf("  path      : %s\n", filename)
+		fmt.Printf("  hash      : %x\n", hash.Sum(nil))
 	} else {
 		// getDB index get DB from key
 		dbIndex, err := getCmIndexFromKey(inKey, cmNum)
@@ -151,11 +154,11 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 		}
 
 		fmt.Printf("Block information:\n")
-		fmt.Printf("  store  : LS\n")
-		fmt.Printf("  inKey  : %s\n", inKey)
-		fmt.Printf("  CMIndex: %d\n", dbIndex)
-		fmt.Printf("  chunk  : %d\n", chunkIndex)
-		fmt.Printf("  hash   : %x\n", hash.Sum(nil))
+		fmt.Printf("  store     : LS\n")
+		fmt.Printf("  inKey     : %s\n", inKey)
+		fmt.Printf("  CM Index  : %d\n", dbIndex)
+		fmt.Printf("  Chunk NUM : %d\n", chunkIndex)
+		fmt.Printf("  hash      : %x\n", hash.Sum(nil))
 	}
 
 }
@@ -166,10 +169,10 @@ func main() {
 	help := flag.Bool("help", false, "Output help page")
 
 	inspectCmd := flag.NewFlagSet("inspect", flag.ExitOnError)
-	inspectKey := inspectCmd.String("key", "", "Block key")
-	inspectRoot := inspectCmd.String("root", "", "Data root dir")
-	inspectSize := inspectCmd.Int("size", 102400, "Block size threshold")
-	inspectCmnum := inspectCmd.Int("cm", 2, "CM number")
+	inspectKey := inspectCmd.String("k", "", "Block key")
+	inspectRoot := inspectCmd.String("r", "", "Data root dir")
+	inspectSize := inspectCmd.Int("s", 102400, "Block size threshold")
+	inspectCmnum := inspectCmd.Int("n", 2, "CM number")
 
 	testCmd := flag.NewFlagSet("test", flag.ExitOnError)
 	testApp := testCmd.String("app", "", "test command")
@@ -196,7 +199,6 @@ func main() {
 			fmt.Println("Please supply the root using -root option.")
 			os.Exit(3)
 		}
-		fmt.Printf("Asked: %q %q %q %q\n", *inspectKey, *inspectRoot, *inspectSize, *inspectCmnum)
 		inspect(inspectRoot, inspectKey, *inspectSize, *inspectCmnum)
 	} else if testCmd.Parsed() {
 		if *testApp == "" {
