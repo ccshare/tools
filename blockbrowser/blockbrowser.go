@@ -85,13 +85,12 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	contract := Contract{}
 	if err := json.Unmarshal(cdata, &contract); err != nil {
 		fmt.Println("decode contract error: ", err)
-		return
 	}
 
 	printContract(&contract)
 	if contract.Status != "MINER_USED" {
 		fmt.Println("Invalid constract status: ", contract.Status)
-		return
+		contract.Size = sizeThreshold + 2
 	}
 
 	if contract.Size > sizeThreshold {
@@ -100,7 +99,7 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 		 * path: 123/456/789/85a0aa21c23f5abd2975a89b682abcd
 		 */
 
-		filename := filepath.Join(rsRoot, inKey[0:2], inKey[3:5], inKey[6:8], inKey[9:])
+		filename := filepath.Join(rsRoot, inKey[0:3], inKey[3:6], inKey[6:])
 		fd, err := os.Open(filename)
 		if err != nil {
 			log.Fatal(err)
@@ -112,11 +111,11 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 			log.Fatal(err)
 		}
 
-		fmt.Println("Block information:")
-		fmt.Println("  store       : RS")
-		fmt.Println("  internal Key: ", inKey)
-		fmt.Println("  path        : ", filename)
-		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
+		fmt.Printf("Block information:\n")
+		fmt.Printf("  store : RS\n")
+		fmt.Printf("  inKey : %s\n", inKey)
+		fmt.Printf("  path  : %s\n", filename)
+		fmt.Printf("  hash  : %x\n", hash.Sum(nil))
 	} else {
 		// getDB index get DB from key
 		dbIndex := int(inKey[0]) % cmNum
@@ -144,12 +143,12 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 			chunkIndex++
 		}
 
-		fmt.Println("Block information:")
-		fmt.Println("  store        : LS")
-		fmt.Println("  internal Key : ", inKey)
-		fmt.Println("  CM index     : ", dbIndex)
-		fmt.Println("  Chunk number : ", chunkIndex)
-		fmt.Printf("   sha256 hash  : %x\n", hash.Sum(nil))
+		fmt.Printf("Block information:\n")
+		fmt.Printf("  store  : LS\n")
+		fmt.Printf("  inKey  : %s\n", inKey)
+		fmt.Printf("  CMIndex: %d\n", dbIndex)
+		fmt.Printf("  chunk  : %d\n", chunkIndex)
+		fmt.Printf("  hash   : %x\n", hash.Sum(nil))
 	}
 
 }
