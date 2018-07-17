@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/sha1"
 	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -59,6 +60,14 @@ func getChunkKeyByIndex(key string, index int) string {
 	return fmt.Sprintf("%s-%06d", key, index)
 }
 
+func getCmIndexFromKey(key string, cm int) (int, error) {
+	decoded, err := hex.DecodeString(key)
+	if err != nil {
+		return 0, err
+	}
+	return int(decoded[0]) % cm, nil
+}
+
 func printContract(contract *Contract) {
 	fmt.Printf("%v", contract)
 }
@@ -90,15 +99,14 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	printContract(&contract)
 	if contract.Status != "MINER_USED" {
 		fmt.Println("Invalid constract status: ", contract.Status)
-		contract.Size = sizeThreshold + 2
+		contract.Size = sizeThreshold - 2
 	}
 
 	if contract.Size > sizeThreshold {
 		/**
 		 * key : 12345678985a0aa21c23f5abd2975a89b682abcd
-		 * path: 123/456/789/85a0aa21c23f5abd2975a89b682abcd
+		 * path: 123/456/78985a0aa21c23f5abd2975a89b682abcd
 		 */
-
 		filename := filepath.Join(rsRoot, inKey[0:3], inKey[3:6], inKey[6:])
 		fd, err := os.Open(filename)
 		if err != nil {
@@ -118,12 +126,12 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 		fmt.Printf("  hash  : %x\n", hash.Sum(nil))
 	} else {
 		// getDB index get DB from key
-		dbIndex := int(inKey[0]) % cmNum
-		fmt.Println("lsDB key index", inKey, dbIndex)
+		dbIndex, err := getCmIndexFromKey(inKey, cmNum)
+		if err != nil {
+			log.Println(err)
+		}
 		dbPath := filepath.Join(lsRoot, strconv.Itoa(dbIndex))
-		fmt.Println("Real db path: ", dbPath)
-
-		lsDb, err := leveldb.OpenFile(cmRoot, nil)
+		lsDb, err := leveldb.OpenFile(dbPath, nil)
 		if err != nil {
 			fmt.Println("Open leveldb error: ", err)
 			return
@@ -136,7 +144,6 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 			chunkKey := getChunkKeyByIndex(inKey, chunkIndex)
 			ldata, err := lsDb.Get([]byte(chunkKey), nil)
 			if err != nil {
-				fmt.Println("not find block in db", err)
 				break
 			}
 			hash.Write(ldata)
