@@ -159,12 +159,16 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 			chunkIndex++
 		}
 
-		fmt.Printf("Block information:\n")
-		fmt.Printf("  store     : LS\n")
-		fmt.Printf("  inKey     : %s\n", inKey)
-		fmt.Printf("  CM Index  : %d\n", dbIndex)
-		fmt.Printf("  Chunk NUM : %d\n", chunkIndex)
-		fmt.Printf("  hash      : %x\n", hash.Sum(nil))
+		if chunkIndex == 0 {
+			fmt.Printf("Block information(not find)\n")
+		} else {
+			fmt.Printf("Block information:\n")
+			fmt.Printf("  store     : LS\n")
+			fmt.Printf("  inKey     : %s\n", inKey)
+			fmt.Printf("  CM Index  : %d\n", dbIndex)
+			fmt.Printf("  Chunk NUM : %d\n", chunkIndex)
+			fmt.Printf("  hash      : %x\n", hash.Sum(nil))
+		}
 	}
 
 }
