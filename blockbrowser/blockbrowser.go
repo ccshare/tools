@@ -85,7 +85,7 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 
 	cdata, err := cmDb.Get([]byte(*key), nil)
 	if err != nil {
-		fmt.Println("not find contract", inKey, err)
+		fmt.Println("not find contract", key, err)
 		return
 	}
 
