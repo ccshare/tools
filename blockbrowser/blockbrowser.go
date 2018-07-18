@@ -169,8 +169,8 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 
 func main() {
 	var VERSION = fmt.Sprintf("Version: %s  build: %s", Version, BuildDate)
-	version := flag.Bool("version", false, "Output version")
-	help := flag.Bool("help", false, "Output help page")
+	version := flag.Bool("v", false, "Output version")
+	help := flag.Bool("h", false, "Output help page")
 
 	inspectCmd := flag.NewFlagSet("inspect", flag.ExitOnError)
 	inspectKey := inspectCmd.String("k", "", "Block key")
