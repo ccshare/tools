@@ -104,10 +104,12 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	fmt.Printf("  leaseBegin: %s (%v)\n", contract.LeaseBegin, time.Unix(leaseBegin/1000, leaseBegin%1000))
 	fmt.Printf("  leaseEnd  : %s (%v)\n", contract.LeaseEnd, time.Unix(leaseEnd/1000, leaseEnd%1000))
 	fmt.Printf("  status    : %s\n", contract.Status)
-	if contract.Status != "MINER_USED" {
-		fmt.Println("Invalid constract status: ", contract.Status)
-		return
-	}
+	/*
+		if contract.Status != "MINER_USED" {
+			fmt.Println("Invalid constract status: ", contract.Status)
+			return
+		}
+	*/
 
 	if contract.Size > sizeThreshold {
 		/**
