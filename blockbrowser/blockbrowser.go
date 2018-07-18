@@ -28,14 +28,14 @@ const contractManager = "myshare-contract-manager"
 const lsName = "lsdata"
 const rsName = "rsdata"
 
-func printUsage(inspectCmd *flag.FlagSet, testCmd *flag.FlagSet) {
+func printUsage(inspectCmd *flag.FlagSet, keyCmd *flag.FlagSet) {
 	flag.Usage()
 	fmt.Println("  inspect")
 	fmt.Println("        Inspect infomation")
-	fmt.Println("  test")
-	fmt.Println("        Test command")
+	fmt.Println("  key")
+	fmt.Println("        Key convert")
 	inspectCmd.Usage()
-	testCmd.Usage()
+	keyCmd.Usage()
 }
 
 // Contract struct
@@ -85,7 +85,7 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 
 	cdata, err := cmDb.Get([]byte(*key), nil)
 	if err != nil {
-		fmt.Println("not find contract", key, err)
+		fmt.Println("not find contract", *key, err)
 		return
 	}
 
@@ -180,19 +180,19 @@ func main() {
 	inspectSize := inspectCmd.Int("s", 102400, "Block size threshold")
 	inspectCmnum := inspectCmd.Int("n", 2, "CM number")
 
-	testCmd := flag.NewFlagSet("test", flag.ExitOnError)
-	testApp := testCmd.String("app", "", "test command")
+	keyCmd := flag.NewFlagSet("key", flag.ExitOnError)
+	keyKey := keyCmd.String("k", "", "block key")
 
 	if len(os.Args) < 2 {
-		printUsage(inspectCmd, testCmd)
+		printUsage(inspectCmd, keyCmd)
 		os.Exit(1)
 	}
 
 	switch os.Args[1] {
 	case "inspect":
 		inspectCmd.Parse(os.Args[2:])
-	case "test":
-		testCmd.Parse(os.Args[2:])
+	case "key":
+		keyCmd.Parse(os.Args[2:])
 	default:
 		flag.Parse()
 	}
@@ -206,20 +206,20 @@ func main() {
 			os.Exit(3)
 		}
 		inspect(inspectRoot, inspectKey, *inspectSize, *inspectCmnum)
-	} else if testCmd.Parsed() {
-		if *testApp == "" {
+	} else if keyCmd.Parsed() {
+		if *keyKey == "" {
 			fmt.Println("Please supply the user using -user option.")
 			os.Exit(2)
 		}
-		fmt.Printf("Asked: %q\n", *testApp)
+		fmt.Printf("internalKey: %s\n", internalKey(*keyKey))
 	} else { // if flag.Parsed()
 		if true == *version {
 			fmt.Printf("%s  %s\n", filepath.Base(os.Args[0]), VERSION)
 		} else if true == *help {
-			printUsage(inspectCmd, testCmd)
+			printUsage(inspectCmd, keyCmd)
 		} else {
 			fmt.Println("Unknow args ...")
-			printUsage(inspectCmd, testCmd)
+			printUsage(inspectCmd, keyCmd)
 		}
 	}
 }
