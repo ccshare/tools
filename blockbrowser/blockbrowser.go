@@ -12,6 +12,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
 )
@@ -39,15 +40,15 @@ func printUsage(inspectCmd *flag.FlagSet, testCmd *flag.FlagSet) {
 
 // Contract struct
 type Contract struct {
-	Version        int    `json:"version"`
-	Fiber          string `json:"fiber"`
-	Miner          string `json:"miner"`
-	MinerFootprint string `json:"minerFootprint"`
-	Hash           string `json:"hash"`
-	Size           int    `json:"size"`
-	LeaseBegin     string `json:"leaseBegin"`
-	LeaseEnd       string `json:"leaseEnd"`
-	Status         string `json:"status"`
+	Version        int         `json:"version"`
+	Fiber          string      `json:"fiber"`
+	Miner          string      `json:"miner"`
+	MinerFootprint string      `json:"minerFootprint"`
+	Hash           string      `json:"hash"`
+	Size           int         `json:"size"`
+	LeaseBegin     json.Number `json:"leaseBegin"`
+	LeaseEnd       json.Number `json:"leaseEnd"`
+	Status         string      `json:"status"`
 }
 
 func internalKey(key string) string {
@@ -94,11 +95,14 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 		return
 	}
 
+	leaseBegin, _ := contract.LeaseBegin.Int64()
+	leaseEnd, _ := contract.LeaseEnd.Int64()
+
 	fmt.Printf("Contract information:\n")
 	fmt.Printf("  hash      : %s\n", contract.Hash)
-	fmt.Printf("  size      : %d\n", contract.Size)
-	fmt.Printf("  leaseBegin: %s\n", contract.LeaseBegin)
-	fmt.Printf("  leaseEnd  : %s\n", contract.LeaseEnd)
+	fmt.Printf("  size      : %d (%dk)\n", contract.Size, contract.Size/1024)
+	fmt.Printf("  leaseBegin: %s (%v)\n", contract.LeaseBegin, time.Unix(leaseBegin/1000, leaseBegin%1000))
+	fmt.Printf("  leaseEnd  : %s (%v)\n", contract.LeaseEnd, time.Unix(leaseEnd/1000, leaseEnd%1000))
 	fmt.Printf("  status    : %s\n", contract.Status)
 	if contract.Status != "MINER_USED" {
 		fmt.Println("Invalid constract status: ", contract.Status)
