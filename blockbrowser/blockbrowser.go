@@ -231,7 +231,6 @@ func main() {
 			fmt.Println("Please supply the root dir with -r option.")
 			os.Exit(3)
 		}
-		fmt.Printf("internalKey: %s\n", internalKey(*fileKey))
 		inspectFile(fileRoot, fileKey)
 	} else if dbCmd.Parsed() {
 		if *dbKey == "" {
@@ -241,7 +240,6 @@ func main() {
 			fmt.Println("Please supply the root dir with -r option.")
 			os.Exit(3)
 		}
-		fmt.Printf("internalKey: %s\n", internalKey(*fileKey))
 		inspectDb(dbRoot, dbKey, *dbNum)
 	} else { // if flag.Parsed()
 		if true == *version {
