@@ -111,9 +111,10 @@ func inspectDb(root *string, key *string, cmNum int) {
 
 	chunkIndex := 0
 	hash := sha256.New()
+	opts := &opt.ReadOptions{DontFillCache: true}
 	for {
 		chunkKey := getChunkKeyByIndex(inKey, chunkIndex)
-		ldata, err := lsDb.Get([]byte(chunkKey), nil)
+		ldata, err := lsDb.Get([]byte(chunkKey), opts)
 		if err != nil {
 			break
 		}
@@ -143,7 +144,8 @@ func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	}
 	defer cmDb.Close()
 
-	cdata, err := cmDb.Get([]byte(*key), nil)
+	opts := &opt.ReadOptions{DontFillCache: true}
+	cdata, err := cmDb.Get([]byte(*key), opts)
 	if err != nil {
 		fmt.Println("Not find contract of ", *key, err)
 		return
