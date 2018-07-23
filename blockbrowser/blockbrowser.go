@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
 // BuildDate to record build date
@@ -100,7 +101,8 @@ func inspectDb(root *string, key *string, cmNum int) {
 		log.Println(err)
 	}
 	dbPath := filepath.Join(*root, strconv.Itoa(dbIndex))
-	lsDb, err := leveldb.OpenFile(dbPath, nil)
+	options := &opt.Options{ErrorIfMissing: true, ReadOnly: true}
+	lsDb, err := leveldb.OpenFile(dbPath, options)
 	if err != nil {
 		fmt.Println("Open leveldb error: ", err)
 		return
@@ -133,7 +135,8 @@ func inspectDb(root *string, key *string, cmNum int) {
 
 func inspect(root *string, key *string, sizeThreshold int, cmNum int) {
 	cmRoot := filepath.Join(*root, contractManager)
-	cmDb, err := leveldb.OpenFile(cmRoot, nil)
+	options := &opt.Options{ErrorIfMissing: true, ReadOnly: true}
+	cmDb, err := leveldb.OpenFile(cmRoot, options)
 	if err != nil {
 		fmt.Println("Open contract leveldb error: ", err)
 		return
