@@ -82,6 +82,11 @@ func inspectFile(root *string, key *string) {
 	}
 	defer fd.Close()
 
+	stat, err := fd.Stat()
+	if err != nil {
+		log.Fatal(err)
+	}
+
 	hash := sha256.New()
 	if _, err := io.Copy(hash, fd); err != nil {
 		log.Fatal(err)
@@ -92,6 +97,7 @@ func inspectFile(root *string, key *string) {
 	fmt.Printf("  inKey     : %s\n", inKey)
 	fmt.Printf("  path      : %s\n", filename)
 	fmt.Printf("  hash      : %x\n", hash.Sum(nil))
+	fmt.Printf("  size      : %d\n", stat.Size())
 }
 
 func inspectDb(root *string, key *string, cmNum int) {
