@@ -202,11 +202,11 @@ func main() {
 
 	fileCmd := flag.NewFlagSet("file", flag.ExitOnError)
 	fileKey := fileCmd.String("k", "", "block key")
-	fileRoot := fileCmd.String("r", "", "Data root dir")
+	fileRoot := fileCmd.String("r", "", "Raw file root dir")
 
 	dbCmd := flag.NewFlagSet("db", flag.ExitOnError)
 	dbKey := dbCmd.String("k", "", "block key")
-	dbRoot := dbCmd.String("r", "", "Data root dir")
+	dbRoot := dbCmd.String("r", "", "DB root dir")
 	dbNum := dbCmd.Int("n", 2, "Chunk DB number")
 
 	if len(os.Args) < 2 {
