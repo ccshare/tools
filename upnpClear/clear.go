@@ -16,9 +16,15 @@ func main() {
 
 	for i := uint16(20000); i < maxPort; i++ {
 		// un-forward a port
-		err = d.Clear(i)
-		if err == nil {
-		       fmt.Printf("unmap port:%d success\n", i)
+		enabled, err := d.IsForwardedTCP(i)
+		if err != nil {
+			continue
+		}
+		if enabled == true {
+			err = d.Clear(i)
+			if err == nil {
+				fmt.Printf("unmap port:%d success\n", i)
+			}
 		}
 	}
 
