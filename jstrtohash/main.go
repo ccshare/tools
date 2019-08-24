@@ -10,9 +10,10 @@ import (
 
 func convert(s, p, j, h string, db int) error {
 	client := redis.NewClient(&redis.Options{
-		Addr:     s,
-		Password: p,  // no password set
-		DB:       db, // use default DB
+		Addr:       s,
+		Password:   p,
+		DB:         db,
+		MaxRetries: 2,
 	})
 
 	if _, err := client.Ping().Result(); err != nil {
