@@ -15,6 +15,7 @@ func convert(s, p, j, h string, db int) error {
 		DB:         db,
 		MaxRetries: 2,
 	})
+	defer client.Close()
 
 	if _, err := client.Ping().Result(); err != nil {
 		return err
