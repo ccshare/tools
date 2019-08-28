@@ -1,22 +1,34 @@
 package main
 
 import (
+	"bytes"
 	"flag"
 	"fmt"
+	"io/ioutil"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
 )
 
 func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
-
-	proxy := httputil.NewSingleHostReverseProxy(url)
-
+	//r.Host = url.Host
 	r.URL.Host = url.Host
 	r.URL.Scheme = url.Scheme
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
-	r.Host = url.Host
 
+	proxy := httputil.NewSingleHostReverseProxy(url)
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		fmt.Println("status: ", resp.StatusCode, resp.Status)
+		fmt.Println(resp.ContentLength)
+		fmt.Println(resp.Header)
+		body, err := ioutil.ReadAll(resp.Body)
+		if err != nil {
+			return err
+		}
+		fmt.Printf("body: %s", body)
+		resp.Body = ioutil.NopCloser(bytes.NewReader(body))
+		return nil
+	}
 	proxy.ServeHTTP(w, r)
 }
 
