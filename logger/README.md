@@ -1,7 +1,7 @@
 ### logrus
 - perf
 ```
-hey -c 300 -n 20000 http://127.0.0.1/log1
+hey -c 300 -n 20000 http://127.0.0.1/logrus
 
 Summary:
   Total:	1.8789 secs
@@ -55,7 +55,7 @@ time="2019-09-01T21:11:31+08:00" level=info msg="log1 sample info" index=3 name=
 ### zap
 - perf
 ```
-hey -c 300 -n 20000 http://127.0.0.1/log2
+hey -c 300 -n 20000 http://127.0.0.1/logzap
 
 Summary:
   Total:	0.6334 secs
