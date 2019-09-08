@@ -6,6 +6,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/golang/glog"
 	"github.com/sirupsen/logrus"
 	zap "go.uber.org/zap"
 )
@@ -17,9 +18,9 @@ func main() {
 	num := flag.Int("n", 1, "log number per request")
 	flag.Parse()
 
-	http.HandleFunc("/loglog", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/log", func(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < *num; i++ {
-			log.Println("loglog sample info, index=", i)
+			log.Println("log sample info, index=", i)
 		}
 		w.Write([]byte(content))
 	})
@@ -31,7 +32,7 @@ func main() {
 	http.HandleFunc("/logrus", func(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < *num; i++ {
 			logrus.WithFields(logrus.Fields{
-				"name":  "walrus",
+				"name":  "logrus",
 				"index": i,
 			}).Info("logrus sample info")
 		}
@@ -45,16 +46,24 @@ func main() {
 		return
 	}
 	defer logzap.Sync()
-	http.HandleFunc("/logzap", func(w http.ResponseWriter, r *http.Request) {
+	http.HandleFunc("/zap", func(w http.ResponseWriter, r *http.Request) {
 		for i := 0; i < *num; i++ {
 			logzap.Info("logzap sample info",
 				zap.Int("index", i),
-				zap.String("name", "walrus"),
+				zap.String("name", "zap"),
 			)
 		}
 		w.Write([]byte(content))
 	})
 
+	http.HandleFunc("/glog", func(w http.ResponseWriter, r *http.Request) {
+		for i := 0; i < *num; i++ {
+			glog.Infof("glog sample info, index=%d, name=%s", i, "glog")
+		}
+		w.Write([]byte(content))
+	})
+
+	fmt.Println("listen: ", fmt.Sprintf(":%d", *port))
 	if err := http.ListenAndServe(fmt.Sprintf(":%d", *port), nil); err != nil {
 		fmt.Println(err)
 	}
