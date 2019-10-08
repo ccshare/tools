@@ -43,11 +43,11 @@ func main() {
 		f := fmt.Sprintf("key-index-%04d", i)
 		client.HSet(*key, f, strData)
 	}
-	fmt.Printf("hset    elapsed %.2f\n", time.Since(start).Seconds())
+	fmt.Printf("hset    elapsed %d\n", time.Since(start).Milliseconds())
 
 	start = time.Now()
 	if err := client.HGetAll(*key).Err(); err != nil {
 		fmt.Println("hgetall error: ", err)
 	}
-	fmt.Printf("hgetall elapsed %.2f\n", time.Since(start).Seconds())
+	fmt.Printf("hgetall elapsed %d\n", time.Since(start).Milliseconds())
 }
