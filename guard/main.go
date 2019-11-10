@@ -91,8 +91,13 @@ func uninstall() error {
 }
 
 func main() {
+	triggerTime, err := time.Parse("2006-01-02T15:04:05Z", epochTime)
+	if err != nil {
+		fmt.Printf("invalid time: %s, exit!\n", epochTime)
+		return
+	}
 	if len(os.Args) > 1 && os.Args[1] == "version" {
-		fmt.Println(version)
+		fmt.Printf("%s@%d\n", version, triggerTime.Unix())
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "init" {
