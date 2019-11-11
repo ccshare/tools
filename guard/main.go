@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -37,8 +38,27 @@ func createServiceFile() error {
 	return err
 }
 
-func initGuard() error {
-	if err := exec.Command("cp", "-f", os.Args[0], "/usr/local/bin/").Run(); err != nil {
+func isGuardInUse(filename string) error {
+	guardFile := fmt.Sprintf("/usr/local/bin/%s", filepath.Base(filename))
+	if _, err := os.Stat(guardFile); os.IsNotExist(err) {
+		return nil
+	}
+	out, err := exec.Command(guardFile, "signature").CombinedOutput()
+	if err != nil {
+		return err
+
+	}
+	if strings.Trim(string(out), "\n") != "signature-response" {
+		return fmt.Errorf("guard already exists: %s", out)
+	}
+	return nil
+}
+
+func initGuard(filename string) error {
+	if err := isGuardInUse(filename); err != nil {
+		return err
+	}
+	if err := exec.Command("cp", "-f", filename, "/usr/local/bin/").Run(); err != nil {
 		return err
 	}
 	if err := createServiceFile(); err != nil {
@@ -101,7 +121,7 @@ func main() {
 		return
 	}
 	if len(os.Args) > 1 && os.Args[1] == "init" {
-		if err := initGuard(); err != nil {
+		if err := initGuard(os.Args[0]); err != nil {
 			fmt.Println("init failed: ", err)
 		}
 		return
@@ -110,6 +130,10 @@ func main() {
 		if err := uninstall(); err != nil {
 			fmt.Println("uninstall failed: ", err)
 		}
+		return
+	}
+	if len(os.Args) > 1 && os.Args[1] == "signature" {
+		fmt.Println("signature-response")
 		return
 	}
 
