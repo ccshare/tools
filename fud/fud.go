@@ -2,7 +2,7 @@ package main
 
 /*
  * A commandline tool to upload/download and validate file
- * 2018-05-27
+ * 2018-05-27T09:09:00Z
  */
 
 import (
