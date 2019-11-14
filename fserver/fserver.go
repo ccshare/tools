@@ -1,5 +1,5 @@
 package main
-
+// a simple file server
 import (
 	"flag"
 	"fmt"
