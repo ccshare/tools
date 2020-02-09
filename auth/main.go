@@ -45,7 +45,7 @@ func casbinMongo(s, o, a string) (bool, error) {
 	// Initialize a MongoDB adapter and use it in a Casbin enforcer:
 	// The adapter will use the database named "casbin".
 	// If it doesn't exist, the adapter will create it automatically.
-	adp := mongodbadapter.NewAdapter("mongodb://casbin_user@password@192.168.55.2:27017/casbin") // Your MongoDB URL.
+	adp := mongodbadapter.NewAdapter("mongodb://casbin_user:password@192.168.55.2:27017")
 
 	// Or you can use an existing DB "abc" like this:
 	// The adapter will use the table named "casbin_rule".
