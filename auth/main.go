@@ -9,6 +9,8 @@ import (
 	redisadapter "github.com/casbin/redis-adapter/v2"
 )
 
+var version = "unknown"
+
 func casbinFile(s, o, a string) (bool, error) {
 	e, err := casbin.NewEnforcer("model.conf", "policy.csv")
 	if err != nil {
@@ -32,7 +34,7 @@ func casbinRedis(s, o, a string) (bool, error) {
 
 	// Modify the policy.
 	e.AddPolicy(s, o, a)
-	// e.RemovePolicy(...)
+	// e.RemovePolicy(s, o, a)
 
 	// Save the policy back to DB.
 	e.SavePolicy()

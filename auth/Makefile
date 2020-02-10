@@ -6,18 +6,6 @@ LONGVER=${VERSION}@${BUILDDATE}@$(shell git log --format=%h -n 1)
 LDFLAGS=-ldflags "-X main.version=${LONGVER}"
 
 .DEFAULT_GOAL:=default
-pkg:
-	@echo "Building Linux amd64 ${BINARY}-${VERSION}"
-	GOOS=linux GOARCH=amd64 go build ${LDFLAGS}
-	zip -m ${BINARY}-${VERSION}-linux.zip ${BINARY}
-	
-	@echo "Building Macos amd64 ${BINARY}-${VERSION}"
-	GOOS=darwin GOARCH=amd64 go build ${LDFLAGS}
-	zip -m ${BINARY}-${VERSION}-macos.zip ${BINARY}
-	
-	@echo "Building Windows amd64 ${BINARY}-${VERSION}"
-	GOOS=windows GOARCH=amd64 go build ${LDFLAGS}
-	zip -m ${BINARY}-${VERSION}-win.zip ${BINARY}.exe
 
 test:
 	go test ./...
@@ -27,7 +15,7 @@ vet:
 
 default:
 	@echo "Building ${BINARY}-${VERSION}"
-	go build ${LDFLAGS}
+	go build ${LDFLAGS} -o ${BINARY}
 
 install: default
 	install ${BINARY} /usr/local/bin/
@@ -36,4 +24,4 @@ clean:
 	rm -rf *zip
 	rm -rf ${BINARY}
 
-.PHONY: pkg test vet default clean
+.PHONY: test vet default clean
