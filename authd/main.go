@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"net/http"
@@ -16,12 +17,20 @@ import (
 )
 
 var (
-	logger     *zap.Logger
-	version    = "unknown"
-	dbAddr     = "mongodb://myuser:pass@47.100.31.117:27017/mydb"
-	collection *mgo.Collection
-	signKey    = "my-secret-20200202"
+	logger        *zap.Logger
+	version       = "unknown"
+	dbAddr        = "mongodb://myuser:pass@47.100.31.117:27017/mydb"
+	collection    *mgo.Collection
+	signSecretKey = []byte("my-secret-20200202")
 )
+
+// User represents a user
+type User struct {
+	ID        string `json:"_id"`
+	Name      string `json:"name"`
+	HashPass  string `json:"hashpass"`
+	Activated bool   `json:"activated"`
+}
 
 func createToken(user string) (string, error) {
 	// Create a new token object, specifying signing method and the claims
@@ -34,15 +43,23 @@ func createToken(user string) (string, error) {
 	})
 
 	// Sign and get the complete encoded token as a string using the secret
-	return token.SignedString(signKey)
+	return token.SignedString(signSecretKey)
 }
 
-func validateUser(user, pass string) error {
-	collection.Find(user)
+func validatePassword(user, pass string) error {
+	u := User{}
+
+	if err := collection.FindId(user).One(&u); err != nil {
+		return err
+	}
+	if u.HashPass != pass {
+		return errors.New("invalid password")
+	}
+
 	return nil
 }
 
-func loginHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
+func authHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 	user := r.FormValue("user")
 	pass := r.FormValue("pass")
 
@@ -51,10 +68,19 @@ func loginHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
 		zap.String("pass", pass),
 	)
 
+	if err := validatePassword(user, pass); err != nil {
+		w.WriteHeader(http.StatusPreconditionFailed)
+		w.Write([]byte("invalid user/passwd"))
+		logger.Info("validate password",
+			zap.String("err", err.Error()),
+		)
+		return
+	}
+
 	tokenString, err := createToken(user)
 	if err != nil {
 		w.WriteHeader(http.StatusInternalServerError)
-		fmt.Fprintln(w, "Sorry, error while Signing Token!")
+		w.Write([]byte("error while signing token"))
 		logger.Info("signing token",
 			zap.String("err", err.Error()),
 		)
@@ -131,7 +157,7 @@ func main() {
 	collection.Find("")
 
 	router := httprouter.New()
-	router.POST("/login", loginHandler)
+	router.POST("/auth", authHandler)
 	router.GET("/ping/:id", pingHandler)
 
 	addr := fmt.Sprintf(":%d", *port)
