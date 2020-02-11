@@ -6,18 +6,64 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"time"
 
+	jwt "github.com/dgrijalva/jwt-go"
 	"github.com/globalsign/mgo"
 	"github.com/julienschmidt/httprouter"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 )
 
-var logger *zap.Logger
-var version = "unknown"
+var (
+	logger     *zap.Logger
+	version    = "unknown"
+	dbAddr     = "mongodb://myuser:pass@47.100.31.117:27017/mydb"
+	collection *mgo.Collection
+	signKey    = "my-secret-20200202"
+)
+
+func createToken(user string) (string, error) {
+	// Create a new token object, specifying signing method and the claims
+	// you would like it to contain.
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, jwt.StandardClaims{
+		Subject: user,
+		// set the expire time
+		// see http://tools.ietf.org/html/draft-ietf-oauth-json-web-token-20#section-4.1.4
+		ExpiresAt: time.Now().Add(time.Hour * 12).Unix(),
+	})
+
+	// Sign and get the complete encoded token as a string using the secret
+	return token.SignedString(signKey)
+}
+
+func validateUser(user, pass string) error {
+	collection.Find(user)
+	return nil
+}
 
 func loginHandler(w http.ResponseWriter, r *http.Request, _ httprouter.Params) {
-	fmt.Fprint(w, "Welcome!\n")
+	user := r.FormValue("user")
+	pass := r.FormValue("pass")
+
+	logger.Info("authenticate",
+		zap.String("user", user),
+		zap.String("pass", pass),
+	)
+
+	tokenString, err := createToken(user)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		fmt.Fprintln(w, "Sorry, error while Signing Token!")
+		logger.Info("signing token",
+			zap.String("err", err.Error()),
+		)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/jwt")
+	w.WriteHeader(http.StatusOK)
+	fmt.Fprintln(w, tokenString)
 }
 
 func pingHandler(w http.ResponseWriter, r *http.Request, ps httprouter.Params) {
@@ -51,8 +97,8 @@ func initLogger(debug bool) (logger *zap.Logger) {
 	return
 }
 
-func initDB(addr, dbName, table string) {
-	dI, err := mgo.ParseURL(addr)
+func initDB() *mgo.Collection {
+	dI, err := mgo.ParseURL(dbAddr)
 	if err != nil {
 		panic(err)
 	}
@@ -62,10 +108,8 @@ func initDB(addr, dbName, table string) {
 		panic(err)
 	}
 
-	db := session.DB(dbName)
-	collection := db.C(table)
-
-	collection.Find("")
+	db := session.DB(dI.Database)
+	return db.C("users")
 }
 
 func main() {
@@ -82,12 +126,19 @@ func main() {
 	logger = initLogger(*debug)
 	defer logger.Sync()
 
+	collection = initDB()
+
+	collection.Find("")
+
 	router := httprouter.New()
 	router.POST("/login", loginHandler)
 	router.GET("/ping/:id", pingHandler)
 
 	addr := fmt.Sprintf(":%d", *port)
 
+	logger.Info("starting",
+		zap.String("addr", addr),
+	)
 	if err := http.ListenAndServe(addr, router); err != nil {
 		logger.Fatal("ListenAndServe",
 			zap.String("addr", addr),
