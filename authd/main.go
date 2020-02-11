@@ -19,7 +19,7 @@ import (
 var (
 	logger        *zap.Logger
 	version       = "unknown"
-	dbAddr        = "mongodb://myuser:pass@47.100.31.117:27017/mydb"
+	dbAddr        = "mongodb://user:pass@127.0.0.1:27017/db"
 	collection    *mgo.Collection
 	signSecretKey = []byte("my-secret-20200202")
 )

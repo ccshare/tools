@@ -3,7 +3,9 @@ BUILDDATE=$(shell date +'%Y-%m-%dT%H:%M:%SZ')@$(shell git rev-parse --short HEAD
 VERSION=1.0.$(shell git rev-list HEAD --count)
 LONGVER=${VERSION}@${BUILDDATE}
 REGISTRY='myshare.io:5000'
-LDFLAGS=-ldflags "-X main.version=${LONGVER}"
+DBADDR='mongodb://u:p@47.100.31.117:27017/mydb'
+
+LDFLAGS=-ldflags "-X main.version=${LONGVER} -X main.dbAddr=${DBADDR}"
 
 .DEFAULT_GOAL:=default
 	
