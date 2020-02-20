@@ -32,7 +32,8 @@ func main() {
 	dbaddr := flag.String("db", "redis://127.0.0.1:6379/0", "redis address")
 	debug := flag.Bool("debug", false, "debug log level")
 	ver := flag.Bool("version", false, "show version")
-	cmd1 := flag.String("cmd1", "tail -q -n +1 -F --max-unchanged-stats=5 /var/log/vipr/emcvipr-object/dataheadsvc-access.log", "cmd 1 to tun")
+	cmd := flag.String("cmd", "tail -q -n +1 -F --max-unchanged-stats=5", "remote cmd to run")
+	remoteLogfile := flag.String("rlf", "/var/log/vipr/emcvipr-object/dataheadsvc-access.log", "remote log file name")
 
 	flag.Parse()
 	if *ver {
@@ -57,7 +58,14 @@ func main() {
 		)
 	}
 
-	if err := run(*user, *passwd, *server, *cmd1); err != nil {
+	client, err := newSSHClient(*user, *passwd, *server)
+	if err != nil {
+		logger.Fatal("new ssh client failed",
+			zap.String("err", err.Error()),
+		)
+	}
+
+	if err := tailNewLog(client, *cmd, *remoteLogfile); err != nil {
 		fmt.Printf("error: %s\n", err)
 		logger.Error("run",
 			zap.String("err", err.Error()),
@@ -106,7 +114,7 @@ func initLogger(debug bool) *zap.Logger {
 	return logger
 }
 
-func run(user, passwd, server, cmd1 string) error {
+func newSSHClient(user, passwd, server string) (*ssh.Client, error) {
 	config := ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
@@ -124,12 +132,13 @@ func run(user, passwd, server, cmd1 string) error {
 		//HostKeyCallback: ssh.FixedHostKey(hostKey),
 	}
 
-	client, err := ssh.Dial("tcp", server, &config)
-	if err != nil {
-		return err
-	}
-	defer client.Close()
+	return ssh.Dial("tcp", server, &config)
+}
+func collectOldLog(client *ssh.Client, marker string) error {
 
+	return nil
+}
+func tailNewLog(client *ssh.Client, cmd, filename string) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
@@ -186,5 +195,5 @@ func run(user, passwd, server, cmd1 string) error {
 		}
 	}(errReader)
 
-	return session.Run(cmd1)
+	return session.Run(fmt.Sprintf("%s %s", cmd, filename))
 }
