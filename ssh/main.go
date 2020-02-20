@@ -2,104 +2,81 @@ package main
 
 import (
 	"bufio"
+	"bytes"
+	"flag"
 	"fmt"
 	"io"
-	"log"
-	"os"
-	"path/filepath"
-	"strings"
 
-	"github.com/pkg/sftp"
 	"golang.org/x/crypto/ssh"
 )
 
 func main() {
-	user := "root"
-	pass := "password"
-	remote := "192.168.55.2:22"
+	user := flag.String("u", "root", "user name")
+	passwd := flag.String("p", "dawter", "user passwd")
+	server := flag.String("s", "192.168.55.2:22", "ssh server")
+	cmd1 := flag.String("cmd1", "ls", "cmd to tun")
 
-	// get host public key
-	//hostKey := getHostKey(remote)
+	flag.Parse()
 
+	if err := run(*user, *passwd, *server, *cmd1); err != nil {
+		fmt.Printf("error: %s\n", err)
+	}
+
+}
+
+func run(user, passwd, server, cmd1 string) error {
 	config := ssh.ClientConfig{
 		User: user,
 		Auth: []ssh.AuthMethod{
-			ssh.Password(pass),
+			ssh.Password(passwd),
+			ssh.KeyboardInteractive(func(user, instruction string, questions []string, echos []bool) ([]string, error) {
+				// Just send the password back for all questions
+				answers := make([]string, len(questions))
+				for i := range answers {
+					answers[i] = passwd // replace this
+				}
+				return answers, nil
+			}),
 		},
 		HostKeyCallback: ssh.InsecureIgnoreHostKey(),
 		//HostKeyCallback: ssh.FixedHostKey(hostKey),
 	}
 
-	// connect
-	conn, err := ssh.Dial("tcp", remote, &config)
+	client, err := ssh.Dial("tcp", server, &config)
 	if err != nil {
-		log.Fatal("ssh dial: ", err)
-	}
-	defer conn.Close()
-
-	// create new SFTP client
-	client, err := sftp.NewClient(conn)
-	if err != nil {
-		log.Fatal("sftp new client: ", err)
+		return err
 	}
 	defer client.Close()
 
-	// create destination file
-	dstFile, err := os.Create("./file.txt")
+	session, err := client.NewSession()
 	if err != nil {
-		log.Fatal("create local file: ", err)
+		return err
 	}
-	defer dstFile.Close()
+	defer session.Close()
 
-	// open source file
-	srcFile, err := client.Open("/tmp/test")
+	outReader, err := session.StdoutPipe()
 	if err != nil {
-		log.Fatal("open remote file: ", err)
+		return err
 	}
 
-	// copy source file to destination file
-	bytes, err := io.Copy(dstFile, srcFile)
+	errReader, err := session.StderrPipe()
 	if err != nil {
-		log.Fatal("copy: ", err)
+		return err
 	}
-	fmt.Printf("%d bytes copied\n", bytes)
 
-	// flush in-memory copy
-	err = dstFile.Sync()
-	if err != nil {
-		log.Fatal("sync: ", err)
+	if err := session.Run(cmd1); err != nil {
+		b := &bytes.Buffer{}
+		io.Copy(b, errReader)
+		fmt.Printf("stderr: %s\n", b.String())
+		return err
 	}
-}
 
-func getHostKey(host string) ssh.PublicKey {
-	// parse OpenSSH known_hosts file
-	// ssh or use ssh-keyscan to get initial key
-	file, err := os.Open(filepath.Join(os.Getenv("HOME"), ".ssh", "known_hosts"))
-	if err != nil {
-		log.Fatal(err)
-	}
-	defer file.Close()
-
-	scanner := bufio.NewScanner(file)
-	var hostKey ssh.PublicKey
+	i := 0
+	scanner := bufio.NewScanner(outReader)
 	for scanner.Scan() {
-		fields := strings.Split(scanner.Text(), " ")
-		if len(fields) != 3 {
-			continue
-		}
-		if strings.Contains(fields[0], host) {
-			var err error
-			hostKey, _, _, _, err = ssh.ParseAuthorizedKey(scanner.Bytes())
-			if err != nil {
-				log.Fatalf("error parsing %q: %v", fields[2], err)
-			}
-			break
-		}
+		//fields := strings.Split(scanner.Text(), " ")
+		fmt.Println(i, scanner.Text())
+		i++
 	}
-
-	if hostKey == nil {
-		log.Fatalf("no hostkey found for %s", host)
-	}
-
-	return hostKey
+	return scanner.Err()
 }
