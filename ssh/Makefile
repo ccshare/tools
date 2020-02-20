@@ -27,6 +27,6 @@ pkg: image
 
 clean:
 	go clean
-	@rm -f docker/msyh.ttc docker/${BINARY}
+	@rm -f ${BINARY}
 
 .PHONY: test vet default image pkg clean

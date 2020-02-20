@@ -10,21 +10,26 @@ import (
 	"strings"
 	"time"
 
+	"github.com/go-redis/redis/v7"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/crypto/ssh"
 )
 
 var (
-	version   = "unknown"
-	logger    *zap.Logger
-	keyPrefix = "side:failures:"
+	version          = "unknown"
+	failureKeyPrefix = "side:failures:"
+	logMarkerKey     = "logger:marker"
+	logMarker        map[string]string
+	logger           *zap.Logger
+	dbClient         *redis.Client
 )
 
 func main() {
 	user := flag.String("u", "root", "user name")
 	passwd := flag.String("p", "dawter", "user passwd")
 	server := flag.String("s", "192.168.55.2:22", "ssh server")
+	dbaddr := flag.String("db", "redis://127.0.0.1:6379/0", "redis address")
 	debug := flag.Bool("debug", false, "debug log level")
 	ver := flag.Bool("version", false, "show version")
 	cmd1 := flag.String("cmd1", "tail -q -n +1 -F --max-unchanged-stats=5 /var/log/vipr/emcvipr-object/dataheadsvc-access.log", "cmd 1 to tun")
@@ -38,6 +43,19 @@ func main() {
 	defer logger.Sync()
 
 	envInit()
+	var err error
+	dbClient, err = dbInit(*dbaddr)
+	if err != nil {
+		logger.Fatal("init db failed",
+			zap.String("err", err.Error()),
+		)
+	}
+	logMarker, err = dbClient.HGetAll(logMarkerKey).Result()
+	if err != nil {
+		logger.Fatal("read log marker failed",
+			zap.String("err", err.Error()),
+		)
+	}
 
 	if err := run(*user, *passwd, *server, *cmd1); err != nil {
 		fmt.Printf("error: %s\n", err)
