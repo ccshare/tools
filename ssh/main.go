@@ -20,16 +20,18 @@ var (
 	version          = "unknown"
 	failureKeyPrefix = "side:failures:"
 	logMarkerKey     = "logger:marker"
-	logMarker        map[string]string
+	logMarker        = ""
+	tmpDir           = os.TempDir()
 	logger           *zap.Logger
 	dbClient         *redis.Client
+	storeFd          *os.File
 )
 
 func main() {
 	user := flag.String("u", "root", "user name")
 	passwd := flag.String("p", "dawter", "user passwd")
 	server := flag.String("s", "192.168.55.2:22", "ssh server")
-	dbaddr := flag.String("db", "redis://127.0.0.1:6379/0", "redis address")
+	dbaddr := flag.String("db", "", "where to store log(default fs, or redis://127.0.0.1:6379/0)")
 	debug := flag.Bool("debug", false, "debug log level")
 	ver := flag.Bool("version", false, "show version")
 	cmd := flag.String("cmd", "tail -q -n +1 -F --max-unchanged-stats=5", "remote cmd to run")
@@ -38,26 +40,13 @@ func main() {
 	flag.Parse()
 	if *ver {
 		fmt.Println(version)
+		fmt.Println(tmpDir)
 		return
 	}
 	logger = initLogger(*debug)
 	defer logger.Sync()
 
 	envInit()
-	var err error
-	dbClient, err = dbInit(*dbaddr)
-	if err != nil {
-		logger.Fatal("init db failed",
-			zap.String("err", err.Error()),
-		)
-	}
-	logMarker, err = dbClient.HGetAll(logMarkerKey).Result()
-	if err != nil {
-		logger.Fatal("read log marker failed",
-			zap.String("err", err.Error()),
-		)
-	}
-
 	client, err := newSSHClient(*user, *passwd, *server)
 	if err != nil {
 		logger.Fatal("new ssh client failed",
@@ -65,7 +54,29 @@ func main() {
 		)
 	}
 
-	if err := tailNewLog(client, *cmd, *remoteLogfile); err != nil {
+	if *dbaddr != "" {
+		dbClient, logMarker, err = dbInit(*dbaddr, logMarkerKey, *server)
+		if err != nil {
+			logger.Fatal("init db failed",
+				zap.String("err", err.Error()),
+			)
+		}
+		defer dbClient.Close()
+	} else {
+		storeFilename := filepath.Join(tmpDir, fmt.Sprintf("%s-%s.log", filepath.Base(*remoteLogfile), *server))
+		logMarker = findMarkerFromFile(storeFilename)
+		storeFd, err = os.OpenFile(storeFilename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
+		if err != nil {
+			logger.Fatal("open store file failed",
+				zap.String("err", err.Error()),
+			)
+		}
+		defer storeFd.Close()
+	}
+
+	fmt.Println("marker: ", logMarker)
+
+	if err := tailNewLog(*server, client, *cmd, *remoteLogfile); err != nil {
 		fmt.Printf("error: %s\n", err)
 		logger.Error("run",
 			zap.String("err", err.Error()),
@@ -101,7 +112,7 @@ func initLogger(debug bool) *zap.Logger {
 	if os.Getenv("LOGGER") == "file" {
 		filename := filepath.Base(os.Args[0])
 		zcfg.OutputPaths = []string{
-			filepath.Join("/tmp", fmt.Sprintf("%s.log", filename)),
+			filepath.Join(tmpDir, fmt.Sprintf("%s.log", filename)),
 		}
 	}
 
@@ -134,11 +145,13 @@ func newSSHClient(user, passwd, server string) (*ssh.Client, error) {
 
 	return ssh.Dial("tcp", server, &config)
 }
+
 func collectOldLog(client *ssh.Client, marker string) error {
 
 	return nil
 }
-func tailNewLog(client *ssh.Client, cmd, filename string) error {
+
+func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
@@ -154,19 +167,53 @@ func tailNewLog(client *ssh.Client, cmd, filename string) error {
 		for scanner.Scan() {
 			text := scanner.Text()
 			fields := strings.Split(text, " ")
-			if len(fields) > 12 && fields[1] != "date" {
+			if len(fields) < 2 || fields[1] == "1.0" || fields[1] == "date" {
+				// ignore log header
+				// Version: 1.0
+				// #Fields: date time x-request-id s-ip c-ip
+				continue
+			} else if len(fields) > 12 {
 				if fields[10] != "-" && (fields[7] == "PUT" || fields[7] == "POST") {
-					logger.Info("got log",
-						zap.String("id", fields[2]),
-						zap.String("ak", fields[5]),
-						zap.String("method", fields[7]),
-						zap.String("bucket", fields[9]),
-						zap.String("object", fields[10]),
-					)
+					if dbClient != nil {
+						logger.Debug("got log",
+							zap.String("id", fields[2]),
+							zap.String("ak", fields[5]),
+							zap.String("method", fields[7]),
+							zap.String("bucket", fields[9]),
+							zap.String("object", fields[10]),
+						)
+						// side:failures:accessKey (SET)
+						bucketsKey := fmt.Sprintf("%s%s", failureKeyPrefix, fields[5])
+						if err := dbClient.SAdd(bucketsKey, fields[9]).Err(); err != nil {
+							logger.Error("write bucket to db failed",
+								zap.String("dbkey", bucketsKey),
+								zap.String("bucket", fields[9]),
+								zap.String("err", err.Error()),
+							)
+						}
+						// side:failures:accessKey:bucket (LIST)
+						objectsKey := fmt.Sprintf("%s:%s", bucketsKey, fields[9])
+						if err := dbClient.RPush(objectsKey, fields[10]).Err(); err != nil {
+							logger.Error("write object to db failed",
+								zap.String("dbkey", objectsKey),
+								zap.String("bucket", fields[10]),
+								zap.String("err", err.Error()),
+							)
+						}
+						if err := dbClient.HSet(logMarkerKey, addr, fmt.Sprintf("%s %s", fields[0], fields[1])).Err(); err != nil {
+							logger.Warn("write marker to db failed",
+								zap.String("err", err.Error()),
+							)
+						}
+					}
+				}
+				if storeFd != nil {
+					storeFd.Write([]byte(text))
+					storeFd.Write([]byte("\n"))
 				}
 			} else {
 				logger.Warn("invalid log",
-					zap.Strings("log", fields),
+					zap.String("log", text),
 				)
 			}
 		}
