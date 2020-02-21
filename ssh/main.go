@@ -2,11 +2,13 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"flag"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"time"
 
@@ -76,11 +78,24 @@ func main() {
 
 	fmt.Println("marker: ", logMarker)
 
-	if err := tailNewLog(*server, client, *cmd, *remoteLogfile); err != nil {
-		fmt.Printf("error: %s\n", err)
-		logger.Error("run",
+	if err := collectArchivedLog(*server, client, *remoteLogfile, logMarker); err != nil {
+		logger.Error("collect archived log failed",
 			zap.String("err", err.Error()),
 		)
+	}
+
+	return
+
+	marker := logMarker
+	for {
+		marker, err = tailNewLog(*server, client, *cmd, *remoteLogfile, marker)
+		if err != nil {
+			fmt.Printf("error: %s\n", err)
+			logger.Error("run",
+				zap.String("err", err.Error()),
+			)
+		}
+		fmt.Println("marker ", marker)
 	}
 
 }
@@ -146,21 +161,71 @@ func newSSHClient(user, passwd, server string) (*ssh.Client, error) {
 	return ssh.Dial("tcp", server, &config)
 }
 
-func collectOldLog(client *ssh.Client, marker string) error {
-
-	return nil
-}
-
-func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
+func collectArchivedLog(addr string, client *ssh.Client, filename, marker string) error {
 	session, err := client.NewSession()
 	if err != nil {
 		return err
 	}
+	logfiles := []string{}
 	defer session.Close()
-
-	outReader, err := session.StdoutPipe()
+	buff := &bytes.Buffer{}
+	session.Stdout = buff
+	cmd := fmt.Sprintf("ls -1 %s*gz", filename)
+	err = session.Run(cmd)
 	if err != nil {
 		return err
+	}
+	fmt.Println(cmd)
+	scanner := bufio.NewScanner(buff)
+	for scanner.Scan() {
+		logfiles = append(logfiles, scanner.Text())
+	}
+	sort.Strings(logfiles)
+
+	filenameMarker := marker
+	if marker != "" {
+		ms := strings.Split(marker, ",")
+		t, err := time.Parse("2006-01-02 15:04:05", ms[0])
+		if err != nil {
+			return err
+		}
+		filenameMarker = t.Format("20060102-150405")
+	}
+	fmt.Println("new marker: ", filenameMarker)
+	for _, v := range logfiles {
+		fmt.Println(v)
+		fields := strings.Split(v, ".")
+		if len(fields) != 4 || !strings.Contains(fields[2], "-") {
+			logger.Warn("invalid archived filename",
+				zap.String("filename", v),
+			)
+		}
+		if fields[2] < filenameMarker {
+			logger.Info("ignore archived file",
+				zap.String("filename", v),
+			)
+			continue
+		}
+		copyArchivedLog(v)
+	}
+	return err
+}
+
+func copyArchivedLog(name string) {
+
+}
+
+func tailNewLog(addr string, client *ssh.Client, cmd, filename, marker string) (string, error) {
+	session, err := client.NewSession()
+	if err != nil {
+		return "", err
+	}
+	defer session.Close()
+
+	newMarker := marker
+	outReader, err := session.StdoutPipe()
+	if err != nil {
+		return "", err
 	}
 	go func(r io.Reader) {
 		scanner := bufio.NewScanner(r)
@@ -173,6 +238,13 @@ func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
 				// #Fields: date time x-request-id s-ip c-ip
 				continue
 			} else if len(fields) > 12 {
+				newMarker = fmt.Sprintf("%s %s", fields[0], fields[1])
+				if newMarker <= marker {
+					logger.Info("skip log",
+						zap.String("marker", newMarker),
+					)
+					continue
+				}
 				if fields[10] != "-" && (fields[7] == "PUT" || fields[7] == "POST") {
 					if dbClient != nil {
 						logger.Debug("got log",
@@ -200,7 +272,7 @@ func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
 								zap.String("err", err.Error()),
 							)
 						}
-						if err := dbClient.HSet(logMarkerKey, addr, fmt.Sprintf("%s %s", fields[0], fields[1])).Err(); err != nil {
+						if err := dbClient.HSet(logMarkerKey, addr, newMarker).Err(); err != nil {
 							logger.Warn("write marker to db failed",
 								zap.String("err", err.Error()),
 							)
@@ -226,7 +298,7 @@ func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
 
 	errReader, err := session.StderrPipe()
 	if err != nil {
-		return err
+		return newMarker, err
 	}
 	go func(r io.Reader) {
 		scanner := bufio.NewScanner(r)
@@ -242,5 +314,6 @@ func tailNewLog(addr string, client *ssh.Client, cmd, filename string) error {
 		}
 	}(errReader)
 
-	return session.Run(fmt.Sprintf("%s %s", cmd, filename))
+	err = session.Run(fmt.Sprintf("%s %s", cmd, filename))
+	return newMarker, err
 }

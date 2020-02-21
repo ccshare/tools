@@ -62,7 +62,7 @@ func dbInit(addr, markerKey, markerField string) (*redis.Client, string, error) 
 	})
 
 	marker, err := client.HGet(markerKey, markerField).Result()
-	if err != nil {
+	if err != nil && err != redis.Nil {
 		return nil, "", err
 	}
 	return client, marker, nil
