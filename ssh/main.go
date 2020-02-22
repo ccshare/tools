@@ -34,16 +34,15 @@ func main() {
 	user := flag.String("u", "root", "user name")
 	passwd := flag.String("p", "dawter", "user passwd")
 	server := flag.String("s", "192.168.55.2:22", "ssh server")
-	store := flag.String("store", "", "where to store log(fs(default) or redis://127.0.0.1:6379/0)")
+	store := flag.String("store", "fs", "where to store log(fs or redis://127.0.0.1:6379/0)")
 	debug := flag.Bool("debug", false, "debug log level")
 	ver := flag.Bool("version", false, "show version")
-	cmd := flag.String("cmd", "tail -q -n +1 -F --max-unchanged-stats=5", "remote cmd to run")
-	remoteLogfile := flag.String("rlf", "/var/log/vipr/emcvipr-object/dataheadsvc-access.log", "remote log file name")
+	cmd := flag.String("cmd", "tail -q -n +1 -F --max-unchanged-stats=5", "cmd to collect log")
+	file := flag.String("file", "/var/log/vipr/emcvipr-object/dataheadsvc-access.log", "remote log file name")
 
 	flag.Parse()
 	if *ver {
 		fmt.Println(version)
-		fmt.Println(tmpDir)
 		return
 	}
 	logger = initLogger(*debug)
@@ -56,8 +55,8 @@ func main() {
 		)
 	}
 
-	if *store == "" { // use fs as log store
-		storeFilename := filepath.Join(tmpDir, fmt.Sprintf("%s-%s.log", filepath.Base(*remoteLogfile), *server))
+	if *store == "fs" { // use fs as log store
+		storeFilename := filepath.Join(tmpDir, fmt.Sprintf("%s-%s.log", filepath.Base(*file), *server))
 		logMarker = findMarkerFromFile(storeFilename)
 		storeFd, err = os.OpenFile(storeFilename, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0666)
 		if err != nil {
@@ -66,7 +65,7 @@ func main() {
 			)
 		}
 		defer storeFd.Close()
-		logger.Info("marker from file",
+		logger.Info("got marker from file",
 			zap.String("marker", logMarker),
 		)
 	} else { // use redis as log store
@@ -77,50 +76,53 @@ func main() {
 			)
 		}
 		defer storeDb.Close()
-		logger.Info("marker from db",
+		logger.Info("got marker from db",
 			zap.String("marker", logMarker),
 		)
 	}
 
-	logfiles, err := searchArchivedLogfile(client, *server, *remoteLogfile, logMarker)
-	if err != nil {
-		logger.Error("collect archived log failed",
-			zap.String("err", err.Error()),
-		)
-	}
-
-	// collect(zcat) archived logs
-	for _, v := range logfiles {
-		if marker, err := collectLog(client, *server, "zcat", v, logMarker); err != nil {
-			logger.Error("collect log error",
-				zap.String("logfile", v),
+	// collect archived logs 2 times to make sure new rotate log collected
+	for i := 0; i < 2; i++ {
+		logfiles, err := searchArchivedLogfile(client, *server, *file, logMarker)
+		if err != nil {
+			logger.Error("collect archived log failed",
 				zap.String("err", err.Error()),
 			)
-		} else {
-			logger.Info("collect log success",
-				zap.String("logfile", v),
-				zap.String("marker", marker),
-			)
+		}
+		// collect(zcat) archived logs
+		for _, v := range logfiles {
+			logMarker, err = collectLog(client, *server, "zcat", v, logMarker)
+			if err != nil {
+				logger.Error("collect log error",
+					zap.String("logfile", v),
+					zap.String("err", err.Error()),
+				)
+			} else {
+				logger.Info("collect log success",
+					zap.String("logfile", v),
+					zap.String("marker", logMarker),
+				)
+			}
 		}
 	}
 
-	// collect(tail) latest log
+	// loop collect(tail) latest log
 	marker := logMarker
 	for {
 		logger.Info("tail log",
-			zap.String("file", *remoteLogfile),
+			zap.String("file", *file),
 			zap.String("marker", marker),
 		)
-		marker, err = collectLog(client, *server, *cmd, *remoteLogfile, marker)
+		marker, err = collectLog(client, *server, *cmd, *file, marker)
 		if err != nil {
 			logger.Error("tail log error",
 				zap.String("cmd", *cmd),
-				zap.String("file", *remoteLogfile),
+				zap.String("file", *file),
 				zap.String("err", err.Error()),
 			)
 		}
 	}
-
+	// end of main
 }
 
 // initLogger init logger
@@ -128,23 +130,19 @@ func initLogger(debug bool) *zap.Logger {
 	zcfg := zap.NewProductionConfig()
 	// Change default(1578990857.105345) timeFormat to 2020-01-14T16:35:34.851+0800
 	zcfg.EncoderConfig.EncodeTime = zapcore.ISO8601TimeEncoder
-
 	if debug {
 		zcfg.Level = zap.NewAtomicLevelAt(zap.DebugLevel)
 	}
-
 	if os.Getenv("LOGGER") == "file" {
 		filename := filepath.Base(os.Args[0])
 		zcfg.OutputPaths = []string{
 			filepath.Join(tmpDir, fmt.Sprintf("%s.log", filename)),
 		}
 	}
-
 	logger, err := zcfg.Build()
 	if err != nil {
 		panic(fmt.Sprintf("initLooger error %s", err))
 	}
-
 	zap.ReplaceGlobals(logger)
 	return logger
 }
@@ -251,7 +249,7 @@ func parseLog(r io.Reader, server, marker string) (newMarker string, err2 error)
 		if len(fields) < 2 || fields[1] == "1.0" || fields[1] == "date" {
 			// ignore log header
 			// Version: 1.0
-			// #Fields: date time x-request-id s-ip c-ip
+			// #Fields: date time x-request-id s-ip c-ip ...
 			logger.Info("skip log",
 				zap.String("log", fields[0]),
 			)

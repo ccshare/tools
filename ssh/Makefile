@@ -1,7 +1,7 @@
-BINARY=myssh
-BUILDDATE=$(shell date +'%Y-%m-%dT%H:%M:%SZ')@$(shell git rev-list HEAD --count)
+BINARY=collog
+BUILDDATEID=$(shell date +'%Y-%m-%dT%H:%M:%SZ')@$(shell git rev-parse --short HEAD)
 VERSION=1.0.$(shell git rev-list HEAD --count)
-LONGVER=${VERSION}@${BUILDDATE}
+LONGVER=${VERSION}@${BUILDDATEID}
 REGISTRY='myshare.io:5000'
 LDFLAGS=-ldflags "-X main.version=${LONGVER}"
 
@@ -15,7 +15,7 @@ vet:
 
 default:
 	@echo "Building ${BINARY}-${VERSION}"
-	go build ${LDFLAGS}
+	go build ${LDFLAGS} -o ${BINARY}
 
 image: clean
 	@echo "Build docker image: ${REGISTRY}/${BINARY}:${VERSION}"
