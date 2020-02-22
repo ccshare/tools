@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/go-redis/redis/v7"
@@ -231,18 +232,19 @@ func searchArchivedLogfile(client *ssh.Client, serverAddr, filename, marker stri
 	return logfiles, nil
 }
 
-func parseLog(r io.Reader, server, marker string) (string, error) {
-	newMarker := marker
+func parseLog(r io.Reader, server, marker string) (newMarker string, err2 error) {
+	newMarker = marker
 	reader := bufio.NewReader(r)
 	for {
 		line, prefix, err := reader.ReadLine()
 		if err != nil {
-			logger.Warn("readline error",
-				zap.String("err", err.Error()),
-			)
+			err2 = err
 			break
 		}
 		if prefix {
+			logger.Warn("readline not finish",
+				zap.Bool("prefix", prefix),
+			)
 			continue
 		}
 		fields := strings.Split(string(line), " ")
@@ -295,11 +297,10 @@ func parseLog(r io.Reader, server, marker string) (string, error) {
 						)
 					}
 				}
-				if storeFd != nil {
-					storeFd.Write(line)
-					storeFd.Write([]byte("\n"))
-					continue
-				}
+			}
+			if storeFd != nil {
+				storeFd.Write(line)
+				storeFd.Write([]byte("\n"))
 			}
 		} else {
 			logger.Warn("invalid log",
@@ -307,7 +308,7 @@ func parseLog(r io.Reader, server, marker string) (string, error) {
 			)
 		}
 	}
-	return newMarker, nil
+	return
 }
 
 func collectLog(client *ssh.Client, serverAddr, cmd, filename, marker string) (string, error) {
@@ -317,45 +318,58 @@ func collectLog(client *ssh.Client, serverAddr, cmd, filename, marker string) (s
 	}
 	defer session.Close()
 
-	if storeFd != nil {
-		session.Stdout = storeFd
-		err = session.Run(fmt.Sprintf("%s %s", cmd, filename))
-		return "stdout-to-file", err
-	}
-
-	newMarker := marker
 	outReader, err := session.StdoutPipe()
 	if err != nil {
 		return "", err
 	}
 
-	go func() {
-		newMarker, err = parseLog(outReader, serverAddr, marker)
+	newMarker := marker
+	wg := sync.WaitGroup{}
+	wg.Add(1)
+	go func(r io.Reader, wg *sync.WaitGroup) {
+		newMarker, err = parseLog(r, serverAddr, marker)
 		if err != nil {
-			logger.Warn("parseLog error",
-				zap.String("err", err.Error()),
-			)
+			if err != io.EOF {
+				logger.Warn("parseLog error",
+					zap.String("err", err.Error()),
+				)
+			} else {
+				err = nil
+			}
 		}
-	}()
+		wg.Done()
+	}(outReader, &wg)
 
 	errReader, err := session.StderrPipe()
 	if err != nil {
 		return newMarker, err
 	}
 	go func(r io.Reader) {
-		scanner := bufio.NewScanner(r)
-		for scanner.Scan() {
+		reader := bufio.NewReader(r)
+		for {
+			line, _, err := reader.ReadLine()
+			if err != nil {
+				if err == io.EOF {
+					break
+				}
+				logger.Error("stderr error",
+					zap.String("err", err.Error()),
+				)
+				continue
+			}
 			logger.Warn("got msg from stderr",
-				zap.String("msg", scanner.Text()),
-			)
-		}
-		if err := scanner.Err(); err != nil {
-			logger.Error("stderr error",
-				zap.String("err", err.Error()),
+				zap.String("msg", string(line)),
 			)
 		}
 	}(errReader)
 
-	err = session.Run(fmt.Sprintf("%s %s", cmd, filename))
+	runCmd := fmt.Sprintf("%s %s", cmd, filename)
+	logger.Info("collect log",
+		zap.String("cmd", runCmd),
+		zap.String("marker", marker),
+	)
+	err = session.Run(runCmd)
+
+	wg.Wait()
 	return newMarker, err
 }
