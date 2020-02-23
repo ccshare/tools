@@ -5,4 +5,4 @@ WORKDIR /
 VOLUME  /tmp
 ENV LOGGER=stdout
 
-CMD ["/collog"]
+CMD ["/sshtail"]

@@ -1,4 +1,4 @@
-BINARY=collog
+BINARY=sshtail
 BUILDDATEID=$(shell date +'%Y-%m-%dT%H:%M:%SZ')@$(shell git rev-parse --short HEAD)
 VERSION=1.0.$(shell git rev-list HEAD --count)
 LONGVER=${VERSION}@${BUILDDATEID}

@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-redis/redis/v7"
+	"github.com/gobike/envflag"
 	"go.uber.org/zap"
 	"go.uber.org/zap/zapcore"
 	"golang.org/x/crypto/ssh"
@@ -22,7 +23,7 @@ import (
 var (
 	version          = "unknown"
 	failureKeyPrefix = "side:failures:"
-	logMarkerKey     = "logger:marker"
+	logMarkerKey     = "side:logger:marker"
 	logMarker        = ""
 	tmpDir           = os.TempDir()
 	logger           *zap.Logger
@@ -31,16 +32,16 @@ var (
 )
 
 func main() {
-	user := flag.String("u", "root", "user name")
-	passwd := flag.String("p", "dawter", "user passwd")
-	server := flag.String("s", "192.168.55.2:22", "ssh server")
+	user := flag.String("user", "root", "ssh user name")
+	passwd := flag.String("passwd", "ChangeMe", "ssh user passwd")
+	server := flag.String("server", "192.168.55.2:22", "ssh server ip:port")
 	store := flag.String("store", "fs", "where to store log(fs or redis://127.0.0.1:6379/0)")
 	debug := flag.Bool("debug", false, "debug log level")
 	ver := flag.Bool("version", false, "show version")
 	cmd := flag.String("cmd", "tail -q -n +1 -F --max-unchanged-stats=5", "cmd to collect log")
 	file := flag.String("file", "/var/log/vipr/emcvipr-object/dataheadsvc-access.log", "remote log file name")
 
-	flag.Parse()
+	envflag.Parse()
 	if *ver {
 		fmt.Println(version)
 		return
@@ -86,6 +87,7 @@ func main() {
 		logfiles, err := searchArchivedLogfile(client, *server, *file, logMarker)
 		if err != nil {
 			logger.Error("collect archived log failed",
+				zap.Int("index", i),
 				zap.String("err", err.Error()),
 			)
 		}
@@ -94,11 +96,13 @@ func main() {
 			logMarker, err = collectLog(client, *server, "zcat", v, logMarker)
 			if err != nil {
 				logger.Error("collect log error",
+					zap.Int("index", i),
 					zap.String("logfile", v),
 					zap.String("err", err.Error()),
 				)
 			} else {
 				logger.Info("collect log success",
+					zap.Int("index", i),
 					zap.String("logfile", v),
 					zap.String("marker", logMarker),
 				)
@@ -180,7 +184,7 @@ func searchArchivedLogfile(client *ssh.Client, serverAddr, filename, marker stri
 	cmd := fmt.Sprintf("ls -1 %s*gz", filename)
 	err = session.Run(cmd)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("run ls -l logfile*gz failed, %w", err)
 	}
 
 	allLogfiles := []string{}
@@ -190,18 +194,11 @@ func searchArchivedLogfile(client *ssh.Client, serverAddr, filename, marker stri
 	}
 	sort.Strings(allLogfiles)
 	if len(marker) < len("2006-01-02 15:04:05") {
-		logger.Warn("invalid marker",
-			zap.String("marker", marker),
-		)
-		return allLogfiles, nil
+		return allLogfiles, fmt.Errorf("invalid marker: %s", marker)
 	}
 	t, err := time.Parse("2006-01-02 15:04:05", marker[0:19])
 	if err != nil {
-		logger.Warn("invalid marker",
-			zap.String("marker", marker),
-			zap.String("err", err.Error()),
-		)
-		return allLogfiles, nil
+		return allLogfiles, fmt.Errorf("invalid marker: %s, %w", marker, err)
 	}
 	marker = t.Format("20060102-150405")
 
