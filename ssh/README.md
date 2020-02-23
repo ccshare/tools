@@ -32,8 +32,9 @@ Usage of ./sshtail:
 - Start container
 环境变量名对应于命令行参数key大写
 ```
-docker run -d --restart always --network host --name sshtail \
+docker run -d --restart always --net host --name sshtail -v /log:/tmp \
     -e USER=admin \
-    -e PASSWD=ChangeMe002 \
-    myshare.io:5000/sshtail:1.0.1
+    -e PASSWD=ChangeMe02 \
+    -e SERVER=172.16.3.98:22 \
+    myshare.io:5000/sshtail:1.0.2
 ```
