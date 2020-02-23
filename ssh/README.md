@@ -28,7 +28,9 @@ Usage of ./sshtail:
   -version
     	show version
 ```
+
 - Start container
+环境变量名对应于命令行参数key大写
 ```
 docker run -d --restart always --network host --name sshtail \
     -e USER=admin \
