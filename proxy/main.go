@@ -47,6 +47,8 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	req.URL.Scheme = url.Scheme
 	req.URL.Host = url.Host
 	req.RequestURI = ""
+	// modify request Header
+
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("client Do error: ", err)
@@ -59,15 +61,17 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 		fmt.Println(h, ": ", v)
 	}
 
+	// modify response Header
 	idHeader := "x-amz-request-id"
 	id2Header := "x-amz-id-2"
-	//mtimeHeader := "x-emc-mtime"
-
+	mtimeHeader := "x-emc-mtime"
 	for k, v := range resp.Header {
 		if textproto.CanonicalMIMEHeaderKey(idHeader) == k {
 			w.Header()[idHeader] = v
 		} else if textproto.CanonicalMIMEHeaderKey(id2Header) == k {
 			w.Header()[id2Header] = v
+		} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
+			w.Header()[mtimeHeader] = v
 		} else {
 			w.Header()[k] = v
 		}
