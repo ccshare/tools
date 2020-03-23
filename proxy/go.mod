@@ -1,3 +1,3 @@
-module myproxy
+module proxy
 
 go 1.13

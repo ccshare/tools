@@ -41,7 +41,9 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		fmt.Println("status: ", resp.Status)
 		fmt.Println(resp.ContentLength)
-		fmt.Println(resp.Header)
+		for h, v := range resp.Header {
+			fmt.Println(h, ": ", v)
+		}
 		fmt.Println("--->")
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
@@ -85,9 +87,9 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 }
 
 func main() {
-	server := flag.String("s", "http://192.168.55.1", "upstream server")
+	server := flag.String("s", "http://172.16.3.98:9020", "upstream server")
 	proxy := flag.Bool("proxy", true, "use buildin reverseproxy")
-	addr := flag.String("addr", ":88", "serve address")
+	addr := flag.String("addr", ":9033", "serve address")
 	flag.Parse()
 
 	url, err := url.Parse(*server)
