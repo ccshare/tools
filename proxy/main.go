@@ -3,6 +3,7 @@ package main
 // test
 import (
 	"bytes"
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -45,7 +46,7 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 		for h, v := range resp.Header {
 			fmt.Println(h, ": ", v)
 		}
-		fmt.Println("--->")
+		fmt.Println("proxy --->")
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -64,13 +65,8 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 
 func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	fmt.Println("serve by request")
-	req, err := http.NewRequest(r.Method, url.String(), r.Body)
-	if err != nil {
-		fmt.Println("new request error: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
+	req := r.Clone(context.Background())
+	req.URL.Host = url.Host
 	resp, err := client.Do(req)
 	if err != nil {
 		fmt.Println("client Do error: ", err)
@@ -81,7 +77,7 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	for h, v := range resp.Header {
 		fmt.Println(h, ": ", v)
 	}
-	fmt.Println("--->")
+	fmt.Println("request --->")
 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
