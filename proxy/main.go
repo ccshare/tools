@@ -33,7 +33,6 @@ var client = http.Client{
 
 func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	fmt.Println("\nproxy")
-	//r.Host = url.Host
 	r.URL.Host = url.Host
 	r.URL.Scheme = url.Scheme
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
@@ -89,7 +88,7 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 
 func main() {
 	server := flag.String("s", "http://172.16.3.98:9020", "upstream server")
-	req := flag.Bool("req", false, "use buildin reverseproxy")
+	proxy := flag.Bool("proxy", false, "use buildin reverseproxy")
 	addr := flag.String("addr", ":9033", "serve address")
 	flag.Parse()
 
@@ -100,7 +99,7 @@ func main() {
 	}
 
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if *req {
+		if *proxy {
 			serveProxy(url, w, r)
 		} else {
 			serveRequest(url, w, r)
