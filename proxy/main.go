@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/textproto"
 	"net/url"
 	"time"
 )
@@ -43,10 +44,12 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		fmt.Println("status: ", resp.Status)
 		fmt.Println(resp.ContentLength)
+
+		fmt.Println("proxy header--->")
 		for h, v := range resp.Header {
 			fmt.Println(h, ": ", v)
 		}
-		fmt.Println("proxy --->")
+
 		body, err := ioutil.ReadAll(resp.Body)
 		if err != nil {
 			return err
@@ -76,10 +79,26 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+	fmt.Println("request headers orig--->")
 	for h, v := range resp.Header {
 		fmt.Println(h, ": ", v)
 	}
-	fmt.Println("request --->")
+
+	idHeader := "x-amz-request-id"
+	id2Header := "x-amz-id-2"
+	mtimeHeader := "x-emc-mtime"
+
+	for k, v := range resp.Header {
+		if textproto.CanonicalMIMEHeaderKey(idHeader) == k {
+			w.Header()[idHeader] = v
+		} else if textproto.CanonicalMIMEHeaderKey(id2Header) == k {
+			w.Header()[id2Header] = v
+		} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
+			w.Header()[mtimeHeader] = v
+		} else {
+			w.Header()[k] = v
+		}
+	}
 
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
