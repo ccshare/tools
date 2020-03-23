@@ -32,7 +32,7 @@ var client = http.Client{
 }
 
 func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
-	fmt.Println("\n\nserve by proxy")
+	fmt.Println("\nproxy")
 	//r.Host = url.Host
 	r.URL.Host = url.Host
 	r.URL.Scheme = url.Scheme
@@ -43,7 +43,6 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 }
 
 func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
-	fmt.Println("\n\nserve by request")
 	req := r.Clone(context.Background())
 	req.URL.Scheme = url.Scheme
 	req.URL.Host = url.Host
@@ -55,7 +54,7 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
-	fmt.Println("request headers orig--->")
+	fmt.Println("\nrequest headers--->")
 	for h, v := range resp.Header {
 		fmt.Println(h, ": ", v)
 	}
@@ -69,8 +68,6 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 			w.Header()[idHeader] = v
 		} else if textproto.CanonicalMIMEHeaderKey(id2Header) == k {
 			w.Header()[id2Header] = v
-			//} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
-			//	w.Header()[mtimeHeader] = v
 		} else {
 			w.Header()[k] = v
 		}
