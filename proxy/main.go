@@ -76,6 +76,11 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 		w.Write([]byte(err.Error()))
 		return
 	}
+	for h, v := range resp.Header {
+		fmt.Println(h, ": ", v)
+	}
+	fmt.Println("--->")
+
 	w.WriteHeader(resp.StatusCode)
 	if _, err := io.Copy(w, resp.Body); err != nil {
 		fmt.Println("io copy error: ", err)
