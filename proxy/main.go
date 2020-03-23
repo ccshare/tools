@@ -2,12 +2,10 @@ package main
 
 // test
 import (
-	"bytes"
 	"context"
 	"flag"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"net"
 	"net/http"
 	"net/http/httputil"
@@ -41,28 +39,6 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
 
 	proxy := httputil.NewSingleHostReverseProxy(url)
-	proxy.ModifyResponse = func(resp *http.Response) error {
-		fmt.Println("status: ", resp.Status)
-		fmt.Println(resp.ContentLength)
-
-		fmt.Println("proxy header--->")
-		for h, v := range resp.Header {
-			fmt.Println(h, ": ", v)
-		}
-
-		body, err := ioutil.ReadAll(resp.Body)
-		if err != nil {
-			return err
-		}
-		amzID := resp.Header.Get("X-Amz-Id-2")
-		if amzID != "" {
-			resp.Header.Del("x-amz-id-2")
-			resp.Header["x-amz-id-2"] = []string{amzID}
-		}
-		resp.Header["x-proxy-id"] = []string{"x-proxy-id-lower"}
-		resp.Body = ioutil.NopCloser(bytes.NewReader(body))
-		return nil
-	}
 	proxy.ServeHTTP(w, r)
 }
 
@@ -86,15 +62,15 @@ func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
 
 	idHeader := "x-amz-request-id"
 	id2Header := "x-amz-id-2"
-	mtimeHeader := "x-emc-mtime"
+	//mtimeHeader := "x-emc-mtime"
 
 	for k, v := range resp.Header {
 		if textproto.CanonicalMIMEHeaderKey(idHeader) == k {
 			w.Header()[idHeader] = v
 		} else if textproto.CanonicalMIMEHeaderKey(id2Header) == k {
 			w.Header()[id2Header] = v
-		} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
-			w.Header()[mtimeHeader] = v
+			//} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
+			//	w.Header()[mtimeHeader] = v
 		} else {
 			w.Header()[k] = v
 		}
