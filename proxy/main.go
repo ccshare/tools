@@ -32,6 +32,7 @@ var client = http.Client{
 }
 
 func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
+	fmt.Println("serve by proxy")
 	//r.Host = url.Host
 	r.URL.Host = url.Host
 	r.URL.Scheme = url.Scheme
@@ -62,6 +63,7 @@ func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
 }
 
 func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
+	fmt.Println("serve by proxy")
 	req, err := http.NewRequest(r.Method, url.String(), r.Body)
 	if err != nil {
 		fmt.Println("new request error: ", err)
