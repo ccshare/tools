@@ -1,4 +1,5 @@
 package main
+
 // a simple file server
 import (
 	"flag"
@@ -38,6 +39,20 @@ func router(host string, port int, content string) {
 	router := httprouter.New()
 
 	router.Handle("GET", "/a", func(w http.ResponseWriter, r *http.Request, p httprouter.Params) {
+		for k, v := range r.Header {
+			fmt.Printf("%s : %v\n", k, v)
+		}
+
+		htest := r.Header.Get("x-htest")
+		fmt.Printf("header-> x-htest[%d]: %s\n", len(htest), htest)
+
+		ht, ok := r.Header["X-Htest"]
+		if ok {
+			fmt.Printf("ok : %v\n", ht)
+		} else {
+			fmt.Printf("not: %v\n", ht)
+		}
+
 		w.Write(body)
 	})
 
@@ -58,6 +73,11 @@ func main() {
 	//fserver(*host, *port)
 
 	//server(*host, *port, *data)
+
+	m := map[string]string{}
+	m["0"] = ""
+	m["1"] = "a"
+	fmt.Printf("%#v\n", m)
 
 	router(*host, *port, *data)
 }
