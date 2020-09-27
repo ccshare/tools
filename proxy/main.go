@@ -53,6 +53,13 @@ var defaultTransport = &http.Transport{
 }
 
 func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
+	read := db.NewTransaction(false)
+	item, err := read.Get([]byte(r.URL.Path))
+	if err == nil {
+		v, _ := item.ValueCopy(nil)
+		w.Write(v)
+		return
+	}
 	realURL.Path = r.URL.Path
 	proxy := httputil.ReverseProxy{
 		Transport: defaultTransport,
@@ -68,7 +75,7 @@ func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
 	proxy.ModifyResponse = func(resp *http.Response) error {
 		if resp.StatusCode == http.StatusOK && resp.Request.Method == http.MethodGet {
 			//visits, shouldCache := cacheIns.ShouldCache(r.Method, bucket.ID, cacheKey, resp.Header.Get("Content-Length"))
-			shouldCache := false
+			shouldCache := true
 			if shouldCache {
 				body, err := ioutil.ReadAll(resp.Body)
 				if err != nil {
@@ -77,6 +84,15 @@ func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
 				}
 				resp.Body = ioutil.NopCloser(bytes.NewReader(body))
 				// write cache
+				txn := db.NewTransaction(true) // Read-write txn
+				err = txn.SetEntry(badger.NewEntry([]byte(r.URL.Path), body).WithTTL(1 * time.Minute))
+				if err != nil {
+					panic(err)
+				}
+				err = txn.Commit()
+				if err != nil {
+					panic(err)
+				}
 			} else {
 				log.Println("success and not cache")
 			}
