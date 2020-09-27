@@ -2,16 +2,22 @@ package main
 
 // test
 import (
-	"context"
+	"bytes"
 	"flag"
 	"fmt"
-	"io"
+	"io/ioutil"
+	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
-	"net/textproto"
 	"net/url"
 	"time"
+
+	"github.com/dgraph-io/badger/v2"
+)
+
+var (
+	db *badger.DB
 )
 
 var client = http.Client{
@@ -31,64 +37,59 @@ var client = http.Client{
 	Timeout: 10 * time.Second,
 }
 
-func serveProxy(url *url.URL, w http.ResponseWriter, r *http.Request) {
-	fmt.Println("\nproxy")
-	r.URL.Host = url.Host
-	r.URL.Scheme = url.Scheme
-	r.Header.Set("X-Forwarded-Host", r.Header.Get("Host"))
+// defaultTransport Transport for gateway
+var defaultTransport = &http.Transport{
+	DialContext: (&net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		DualStack: true,
+	}).DialContext,
+	ForceAttemptHTTP2:     true,
+	MaxIdleConns:          128,
+	MaxIdleConnsPerHost:   128,
+	IdleConnTimeout:       90 * time.Second,
+	TLSHandshakeTimeout:   10 * time.Second,
+	ExpectContinueTimeout: 1 * time.Second,
+}
 
-	proxy := httputil.NewSingleHostReverseProxy(url)
+func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
+	realURL.Path = r.URL.Path
+	proxy := httputil.ReverseProxy{
+		Transport: defaultTransport,
+		Director: func(req *http.Request) {
+			req.URL = realURL
+			req.Host = realURL.Host
+			if _, ok := req.Header["User-Agent"]; !ok {
+				// explicitly disable User-Agent so it's not set to default value
+				req.Header.Set("User-Agent", "")
+			}
+		},
+	}
+	proxy.ModifyResponse = func(resp *http.Response) error {
+		if resp.StatusCode == http.StatusOK && resp.Request.Method == http.MethodGet {
+			//visits, shouldCache := cacheIns.ShouldCache(r.Method, bucket.ID, cacheKey, resp.Header.Get("Content-Length"))
+			shouldCache := false
+			if shouldCache {
+				body, err := ioutil.ReadAll(resp.Body)
+				if err != nil {
+					log.Printf("read upstream body error %s", err)
+					return err
+				}
+				resp.Body = ioutil.NopCloser(bytes.NewReader(body))
+				// write cache
+			} else {
+				log.Println("success and not cache")
+			}
+		}
+		return nil
+	}
 	proxy.ServeHTTP(w, r)
 }
 
-func serveRequest(url *url.URL, w http.ResponseWriter, r *http.Request) {
-	req := r.Clone(context.Background())
-	req.URL.Scheme = url.Scheme
-	req.URL.Host = url.Host
-	req.RequestURI = ""
-
-	resp, err := client.Do(req)
-	if err != nil {
-		fmt.Println("client Do error: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-	fmt.Println("\nrequest headers--->")
-	for h, v := range resp.Header {
-		fmt.Println(h, ": ", v)
-	}
-
-	// modify response Header
-	idHeader := "x-amz-request-id"
-	id2Header := "x-amz-id-2"
-	mtimeHeader := "x-emc-mtime" // for s3v4
-	for k, v := range resp.Header {
-		if textproto.CanonicalMIMEHeaderKey(idHeader) == k {
-			w.Header()[idHeader] = v
-		} else if textproto.CanonicalMIMEHeaderKey(id2Header) == k {
-			w.Header()[id2Header] = v
-		} else if textproto.CanonicalMIMEHeaderKey(mtimeHeader) == k {
-			w.Header()[mtimeHeader] = v
-		} else {
-			w.Header()[k] = v
-		}
-	}
-
-	w.WriteHeader(resp.StatusCode)
-	if _, err := io.Copy(w, resp.Body); err != nil {
-		fmt.Println("io copy error: ", err)
-		w.WriteHeader(http.StatusInternalServerError)
-		w.Write([]byte(err.Error()))
-		return
-	}
-
-}
-
 func main() {
-	server := flag.String("s", "http://172.16.3.98:9020", "upstream server")
-	proxy := flag.Bool("proxy", false, "use buildin reverseproxy")
-	addr := flag.String("addr", ":9033", "serve address")
+	server := flag.String("s", "http://192.168.55.2:9000", "upstream server")
+	ddir := flag.String("d", "/tmp/db", "db dir")
+	addr := flag.String("addr", ":80", "serve address")
 	flag.Parse()
 
 	url, err := url.Parse(*server)
@@ -97,12 +98,15 @@ func main() {
 		return
 	}
 
+	opts := badger.DefaultOptions(*ddir)
+	db, err = badger.Open(opts)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer db.Close()
+
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		if *proxy {
-			serveProxy(url, w, r)
-		} else {
-			serveRequest(url, w, r)
-		}
+		serveProxy(url, w, r)
 	})
 
 	if err := http.ListenAndServe(*addr, nil); err != nil {
