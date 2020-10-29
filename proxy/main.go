@@ -56,10 +56,13 @@ func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
 	read := db.NewTransaction(false)
 	item, err := read.Get([]byte(r.URL.Path))
 	if err == nil {
-		v, _ := item.ValueCopy(nil)
-		w.Write(v)
-		return
+		if v, e := item.ValueCopy(nil); e == nil {
+			log.Println("got from cache")
+			w.Write(v)
+			return
+		}
 	}
+
 	realURL.Path = r.URL.Path
 	proxy := httputil.ReverseProxy{
 		Transport: defaultTransport,
@@ -93,6 +96,7 @@ func serveProxy(realURL *url.URL, w http.ResponseWriter, r *http.Request) {
 				if err != nil {
 					panic(err)
 				}
+				log.Println("success and cached")
 			} else {
 				log.Println("success and not cache")
 			}
