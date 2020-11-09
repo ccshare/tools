@@ -59,7 +59,7 @@ func signV4(region, ak, sk, method, endpoint, path, hash string, presign bool, e
 }
 
 func main() {
-	var endpoint, region, ak, sk, hash string
+	var endpoint, region, ak, sk string
 	var headers []string
 	var presign bool
 	var rootCmd = &cobra.Command{
@@ -80,7 +80,7 @@ func main() {
 				return fmt.Errorf("invalid http method: %s", method)
 			}
 			presign := cmd.Flag("presign").Changed
-
+			hash := cmd.Flag("hash").Value.String()
 			err := signV4(region, ak, sk, method, endpoint, args[0], hash, presign, 84600)
 			if err != nil {
 				return err
@@ -94,9 +94,9 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&ak, "ak", "", "object_user1", "access key")
 	rootCmd.PersistentFlags().StringVarP(&sk, "sk", "", "ChangeMeChangeMeChangeMeChangeMeChangeMe", "secret key")
 	rootCmd.PersistentFlags().BoolVarP(&presign, "presign", "", false, "presign request")
-	rootCmd.PersistentFlags().StringArrayVarP(&headers, "header", "H", []string{"content-type:text"}, "http headers")
+	rootCmd.PersistentFlags().StringArrayVarP(&headers, "header", "H", nil, "http headers to sign(-H'content-type:application/json' -H'x-amz-a:b')")
 	rootCmd.PersistentFlags().StringP("method", "X", http.MethodGet, "http request method")
-	rootCmd.PersistentFlags().StringVarP(&hash, "hash", "", "UNSIGNED-PAYLOAD", "body checksum")
+	rootCmd.PersistentFlags().StringP("hash", "", "UNSIGNED-PAYLOAD", "body checksum")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)
