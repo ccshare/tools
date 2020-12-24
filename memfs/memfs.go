@@ -186,6 +186,17 @@ func (fs *memFS) deallocateInode(id fuseops.InodeID) {
 ////////////////////////////////////////////////////////////////////////
 
 func (fs *memFS) StatFS(ctx context.Context, op *fuseops.StatFSOp) error {
+	const BlockSize = 4096
+	const TotalSpace = 1 * 1024 * 1024 * 1024 * 1024 * 1024 // 1PB
+	const TotalBlocks = TotalSpace / BlockSize
+	const INODES = 1 * 1000 * 1000 * 1000 // 1 billion
+	op.BlockSize = BlockSize
+	op.Blocks = TotalBlocks
+	op.BlocksFree = TotalBlocks
+	op.BlocksAvailable = TotalBlocks
+	op.IoSize = 1 * 1024 * 1024 // 1MB
+	op.Inodes = INODES
+	op.InodesFree = INODES
 	return nil
 }
 
