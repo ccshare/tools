@@ -707,6 +707,15 @@ func (fs *memFS) FlushFile(ctx context.Context, op *fuseops.FlushFileOp) (err er
 	return
 }
 
+func (fs *memFS) ReleaseFileHandle(ctx context.Context, op *fuseops.ReleaseFileHandleOp) (err error) {
+	if op.OpContext.Pid == 0 {
+		// FlushFileOp should have a valid pid in context.
+		fmt.Printf("ReleaseFileHandle opctx error, handle[%v]\n", op.Handle)
+	}
+	fmt.Printf("ReleaseFileHandle  handle[%v]\n", op.Handle)
+	return
+}
+
 func (fs *memFS) ReadSymlink(ctx context.Context, op *fuseops.ReadSymlinkOp) error {
 	if op.OpContext.Pid == 0 {
 		return fuse.EINVAL
