@@ -202,9 +202,11 @@ func (fs *memFS) StatFS(ctx context.Context, op *fuseops.StatFSOp) error {
 
 func (fs *memFS) LookUpInode(ctx context.Context, op *fuseops.LookUpInodeOp) error {
 	if op.OpContext.Pid == 0 {
+		fmt.Printf("LookUpInode ctxPid error, parent[%v] name[%v]\n", op.Parent, op.Name)
 		return fuse.EINVAL
 	}
 
+	fmt.Printf("LookUpInode parent[%v] name[%v]\n", op.Parent, op.Name)
 	fs.mu.Lock()
 	defer fs.mu.Unlock()
 

@@ -296,7 +296,6 @@ func (in *inode) ReadAt(p []byte, off int64) (int, error) {
 		panic("ReadAt called on non-file.")
 	}
 
-	fmt.Printf("readat off[%v], len[%v] content[%s]\n", off, len(in.contents), in.contents)
 	// Ensure the offset is in range.
 	if off > int64(len(in.contents)) {
 		fmt.Println("readat err1")
@@ -306,7 +305,6 @@ func (in *inode) ReadAt(p []byte, off int64) (int, error) {
 	// Read what we can.
 	n := copy(p, in.contents[off:])
 	if n < len(p) {
-		fmt.Println("readat err2")
 		return n, io.EOF
 	}
 
@@ -321,7 +319,6 @@ func (in *inode) WriteAt(p []byte, off int64) (int, error) {
 		panic("WriteAt called on non-file.")
 	}
 
-	fmt.Printf("writeat off[%v], len[%v] content[%s]\n", off, len(p), p)
 	// Update the modification time.
 	in.attrs.Mtime = time.Now()
 
