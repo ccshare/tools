@@ -31,6 +31,7 @@ var (
 	appID      string
 	appKey     string
 	urlType    string
+	uinfo      string
 	endpoint   string
 	bucket     string
 	accessKey  string
@@ -144,6 +145,39 @@ func GenStaticURL(gw, appID, appKey, presignURL string) (string, error) {
 		0), nil
 }
 
+// GenDynamic2URL generate dynamic2 URL
+func GenDynamic2URL(gw, appID, appKey, presignURL, uinfo string, exp int64) (string, error) {
+	if appID == "" {
+		return "", errors.New("invalid appID")
+	}
+	if appKey == "" {
+		return "", errors.New("invalid appKey")
+	}
+	if uinfo == "" {
+		return "", errors.New("invalid cmb_uinfo")
+	}
+	if exp <= time.Now().Unix() {
+		return "", errors.New("invalid exp timestamp")
+	}
+	gwURL, err := url.ParseRequestURI(gw)
+	if err != nil {
+		return "", fmt.Errorf("invalid gateway addr, %s", err)
+	}
+	psgURL, err := url.ParseRequestURI(presignURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid presignURL, %s", err)
+	}
+
+	sign := gwSignatue(appKey, uinfo, psgURL.RequestURI(), exp, nil)
+
+	return fmt.Sprintf("%s/g/%s/%s/%s/%d",
+		gwURL.String(),
+		base64.URLEncoding.EncodeToString([]byte(psgURL.RequestURI())),
+		sign,
+		appID,
+		exp), nil
+}
+
 func objectSize(min, max uint64) uint64 {
 	if min >= max {
 		return max
@@ -158,6 +192,7 @@ func main() {
 	flag.StringVar(&secretKey, "sk", "", "S3 secret key")
 	flag.StringVar(&appID, "i", "", "App ID")
 	flag.StringVar(&appKey, "k", "", "App key")
+	flag.StringVar(&uinfo, "u", "uinfo-value", "UInfo")
 	//flag.StringVar(&urlType, "t", "", "url type(open,gwopen,static,dyanmic,dyanmic2,sec)")
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
 	flag.StringVar(&bucket, "b", "", "Bucket name")
@@ -212,7 +247,8 @@ func main() {
 					log.Fatal("presign: ", err)
 					return
 				}
-				gwURL, err := GenStaticURL(gw, appID, appKey, presignURL)
+
+				gwURL, err := GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
 				if err != nil {
 					log.Fatal("GenGWURL: ", presignURL, err)
 					return
@@ -225,6 +261,7 @@ func main() {
 				}
 				req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
 				req.Header.Set("Content-Type", "application/octet-stream")
+				req.Header.Set("Cmb_uinfo", uinfo)
 
 				if resp, err := httpClient.Do(req); err != nil {
 					log.Fatalf("FATAL: Error uploading object %s: %v", presignURL, err)
