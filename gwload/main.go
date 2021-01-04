@@ -224,7 +224,6 @@ func main() {
 	if minObjSize > maxObjSize {
 		log.Fatalf("Invalid -min argument for object size: %v", err)
 	}
-	fmt.Println("size: ", minObjSize, maxObjSize)
 
 	httpClient := &http.Client{Transport: transport}
 
@@ -269,7 +268,6 @@ func main() {
 					}
 					uinfo = ""
 				}
-				fmt.Println("URL: ", presignURL, gwURL)
 				req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
 				if err != nil {
 					log.Fatal("NewRequest: ", err)
@@ -282,18 +280,28 @@ func main() {
 				}
 
 				if resp, err := httpClient.Do(req); err != nil {
-					log.Fatalf("FATAL: Error uploading object %s: %v", presignURL, err)
+					if resp != nil {
+						log.Fatalf("FATAL: Error uploading object: resp:%+v, error: %s\n", resp, err)
+					} else {
+						log.Fatalf("FATAL: Error uploading object: resp:nil, error: %s\n", err)
+					}
 				} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 					atomic.AddInt32(&uploadFailedCount, 1)
 					atomic.AddInt32(&uploadCount, -1)
 					fmt.Printf("upload resp: %v\n", resp)
 					if resp.StatusCode != http.StatusServiceUnavailable {
-						fmt.Printf("Upload status %s: resp: %+v\n", resp.Status, resp)
 						if resp.Body != nil {
 							body, _ := ioutil.ReadAll(resp.Body)
-							fmt.Printf("Body: %s\n", string(body))
+							fmt.Printf("%v: %s, %+v, %s\n", resp.StatusCode, gwURL, resp, body)
+							resp.Body.Close()
+						} else {
+							fmt.Printf("%v: %s, %+v, nil\n", resp.StatusCode, gwURL, resp)
 						}
 					}
+				} else {
+					body, _ := ioutil.ReadAll(resp.Body)
+					fmt.Printf("%v: %s, %s\n", resp.StatusCode, gwURL, body)
+					resp.Body.Close()
 				}
 				wg.Done()
 			}()
