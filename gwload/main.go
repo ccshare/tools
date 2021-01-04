@@ -193,16 +193,22 @@ func main() {
 	flag.StringVar(&appID, "i", "", "App ID")
 	flag.StringVar(&appKey, "k", "", "App key")
 	flag.StringVar(&uinfo, "u", "uinfo-value", "UInfo")
-	//flag.StringVar(&urlType, "t", "", "url type(open,gwopen,static,dyanmic,dyanmic2,sec)")
+	flag.StringVar(&urlType, "t", "static", "GW url type(static,dyanmic2)")
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
 	flag.StringVar(&bucket, "b", "", "Bucket name")
 	flag.IntVar(&rounds, "n", 1, "Number of rounds to run")
-	flag.IntVar(&concurent, "c", 10, "Number of requests to run concurrently")
+	flag.IntVar(&concurent, "c", 20, "Number of requests to run concurrently")
 	flag.StringVar(&maxSizeArg, "max", "10M", "Max size of objects in bytes with postfix K, M, and G")
 	flag.StringVar(&minSizeArg, "min", "2M", "Min size of objects in bytes with postfix K, M, and G")
 	flag.Parse()
 	if gw == "" || endpoint == "" {
 		fmt.Printf("unknown gw:%v, endpoint:%v\n", gw, endpoint)
+		flag.Usage()
+		return
+	}
+
+	if urlType != "static" && urlType != "dynamic2" {
+		fmt.Printf("unknown GW URL Type:%v\n", urlType)
 		flag.Usage()
 		return
 	}
@@ -247,11 +253,21 @@ func main() {
 					log.Fatal("presign: ", err)
 					return
 				}
+				var gwURL string
 
-				gwURL, err := GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
-				if err != nil {
-					log.Fatal("GenGWURL: ", presignURL, err)
-					return
+				if urlType == "dynamic2" {
+					gwURL, err = GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
+					if err != nil {
+						log.Fatal("GenGWURL: ", presignURL, err)
+						return
+					}
+				} else if urlType == "static" {
+					gwURL, err = GenStaticURL(gw, appID, appKey, presignURL)
+					if err != nil {
+						log.Fatal("GenGWURL: ", presignURL, err)
+						return
+					}
+					uinfo = ""
 				}
 				fmt.Println("URL: ", presignURL, gwURL)
 				req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
@@ -261,7 +277,9 @@ func main() {
 				}
 				req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
 				req.Header.Set("Content-Type", "application/octet-stream")
-				req.Header.Set("Cmb_uinfo", uinfo)
+				if uinfo != "" {
+					req.Header.Set("Cmb_uinfo", uinfo)
+				}
 
 				if resp, err := httpClient.Do(req); err != nil {
 					log.Fatalf("FATAL: Error uploading object %s: %v", presignURL, err)
