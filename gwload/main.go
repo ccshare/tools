@@ -26,18 +26,19 @@ import (
 )
 
 var (
-	gw        string
-	sc        string
-	appID     string
-	appKey    string
-	urlType   string
-	endpoint  string
-	bucket    string
-	accessKey string
-	secretKey string
-	sizeArg   string
-	concurent int
-	rounds    int
+	gw         string
+	sc         string
+	appID      string
+	appKey     string
+	urlType    string
+	endpoint   string
+	bucket     string
+	accessKey  string
+	secretKey  string
+	maxSizeArg string
+	minSizeArg string
+	concurent  int
+	rounds     int
 )
 
 func init() {
@@ -143,55 +144,68 @@ func GenStaticURL(gw, appID, appKey, presignURL string) (string, error) {
 		0), nil
 }
 
+func objectSize(min, max uint64) uint64 {
+	if min >= max {
+		return max
+	}
+	return mrand.Uint64()%(max-min) + min
+
+}
 func main() {
-	flag.StringVar(&gw, "gw", "", "gw address")
-	flag.StringVar(&sc, "sc", "", "sc address")
+	flag.StringVar(&gw, "gw", "", "GW address")
+	//flag.StringVar(&sc, "sc", "", "sc address")
 	flag.StringVar(&accessKey, "ak", "", "S3 access key")
 	flag.StringVar(&secretKey, "sk", "", "S3 secret key")
-	flag.StringVar(&appID, "i", "", "app ID")
-	flag.StringVar(&appKey, "k", "", "app key")
-	flag.StringVar(&urlType, "t", "", "url type(open,gwopen,static,dyanmic,dyanmic2,sec)")
+	flag.StringVar(&appID, "i", "", "App ID")
+	flag.StringVar(&appKey, "k", "", "App key")
+	//flag.StringVar(&urlType, "t", "", "url type(open,gwopen,static,dyanmic,dyanmic2,sec)")
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
-	flag.StringVar(&bucket, "b", "", "bucket name")
-	flag.IntVar(&rounds, "n", 10, "Number of rounds to run")
-	flag.IntVar(&concurent, "c", 1, "Number of requests to run concurrently")
-	flag.StringVar(&sizeArg, "z", "128K", "Size of objects in bytes with postfix K, M, and G")
+	flag.StringVar(&bucket, "b", "", "Bucket name")
+	flag.IntVar(&rounds, "n", 1, "Number of rounds to run")
+	flag.IntVar(&concurent, "c", 10, "Number of requests to run concurrently")
+	flag.StringVar(&maxSizeArg, "max", "128K", "Max size of objects in bytes with postfix K, M, and G")
+	flag.StringVar(&minSizeArg, "min", "128K", "Min size of objects in bytes with postfix K, M, and G")
 	flag.Parse()
 	if gw == "" || endpoint == "" {
+		fmt.Printf("unknown gw:%v, endpoint:%v\n", gw, endpoint)
 		flag.Usage()
 		return
 	}
+
+	maxObjSize, err := bytefmt.ToBytes(maxSizeArg)
+	if err != nil {
+		log.Fatalf("Invalid -max argument for object size: %v", err)
+	}
+	minObjSize, err := bytefmt.ToBytes(minSizeArg)
+	if err != nil {
+		log.Fatalf("Invalid -min argument for object size: %v", err)
+	}
+	if minObjSize > maxObjSize {
+		log.Fatalf("Invalid -min argument for object size: %v", err)
+	}
+	fmt.Println("size: ", minObjSize, maxObjSize)
+
 	httpClient := &http.Client{Transport: transport}
-	var totalUploadTime float64
+
 	var totalUploadCount int32
 	var totalUploadFailedCount int32
 
-	objectSize, err := bytefmt.ToBytes(sizeArg)
-	if err != nil {
-		log.Fatalf("Invalid -z argument for object size: %v", err)
-	}
-	fmt.Println("size: ", objectSize)
-
-	objectData := make([]byte, objectSize)
+	objectData := make([]byte, maxObjSize)
 	if n, e := rand.Read(objectData); e != nil {
 		log.Fatalf("generate random data failed: %s", e)
-	} else if uint64(n) < objectSize {
-		log.Fatalf("invalid random data size, got %d, expect %d", n, objectSize)
+	} else if uint64(n) < maxObjSize {
+		log.Fatalf("invalid random data size, got %d, expect %d", n, maxObjSize)
 	}
 
-	// Loop running the tests
-	fmt.Println("Loop\tMethod\t  Objects\tElapsed(s)\t Throuphput\t   TPS\t Failed")
 	for r := 1; r <= rounds; r++ {
 		var uploadCount, uploadFailedCount int32
-
-		var uploadFinish time.Time
-		starttime := time.Now()
-
 		wg := sync.WaitGroup{}
 		for n := 1; n <= concurent; n++ {
 			wg.Add(1)
 			go func() {
-				fileobj := bytes.NewReader(objectData)
+				atomic.AddInt32(&uploadCount, 1)
+				randomSize := objectSize(minObjSize, maxObjSize)
+				fileobj := bytes.NewReader(objectData[0:randomSize])
 				key := RandomString(18)
 				presignURL, err := presignV2(http.MethodPut, endpoint, bucket, key, "application/octet-stream", accessKey, secretKey, 684000)
 				if err != nil {
@@ -209,7 +223,7 @@ func main() {
 					log.Fatal("NewRequest: ", err)
 					return
 				}
-				req.Header.Set("Content-Length", strconv.FormatUint(objectSize, 10))
+				req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
 				req.Header.Set("Content-Type", "application/octet-stream")
 
 				if resp, err := httpClient.Do(req); err != nil {
@@ -230,11 +244,11 @@ func main() {
 			}()
 		}
 		wg.Wait()
-		uploadTime := uploadFinish.Sub(starttime).Seconds()
-		totalUploadTime += uploadTime
+
 		totalUploadCount += uploadCount
 		totalUploadFailedCount += totalUploadFailedCount
-		bps := float64(uint64(uploadCount)*objectSize) / uploadTime
-		fmt.Println(fmt.Sprintf("%4d\t%6s\t%9d\t%10.1f\t%10sB\t%6.1f\t%7d", r, http.MethodPut, uploadCount, uploadTime, bytefmt.ByteSize(uint64(bps)), float64(uploadCount)/uploadTime, uploadFailedCount))
+		fmt.Printf("%4d\t\t%v/%v\n", r, uploadFailedCount, uploadCount)
 	}
+
+	fmt.Printf("done\t\t%v/%v\n", totalUploadFailedCount, totalUploadCount)
 }
