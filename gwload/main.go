@@ -40,6 +40,7 @@ var (
 	minSizeArg string
 	concurent  int
 	rounds     int
+	debug      bool
 )
 
 func init() {
@@ -200,6 +201,7 @@ func main() {
 	flag.IntVar(&concurent, "c", 20, "Number of requests to run concurrently")
 	flag.StringVar(&maxSizeArg, "max", "10M", "Max size of objects in bytes with postfix K, M, and G")
 	flag.StringVar(&minSizeArg, "min", "2M", "Min size of objects in bytes with postfix K, M, and G")
+	flag.BoolVar(&debug, "debug", false, "debug log level")
 	flag.Parse()
 	if gw == "" || endpoint == "" {
 		fmt.Printf("unknown gw:%v, endpoint:%v\n", gw, endpoint)
@@ -268,12 +270,13 @@ func main() {
 					}
 					uinfo = ""
 				}
+
 				req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
 				if err != nil {
 					log.Fatal("NewRequest: ", err)
 					return
 				}
-				req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
+				//req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
 				req.Header.Set("Content-Type", "application/octet-stream")
 				if uinfo != "" {
 					req.Header.Set("Cmb_uinfo", uinfo)
@@ -288,7 +291,6 @@ func main() {
 				} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 					atomic.AddInt32(&uploadFailedCount, 1)
 					atomic.AddInt32(&uploadCount, -1)
-					fmt.Printf("upload resp: %v\n", resp)
 					if resp.StatusCode != http.StatusServiceUnavailable {
 						if resp.Body != nil {
 							body, _ := ioutil.ReadAll(resp.Body)
@@ -300,7 +302,12 @@ func main() {
 					}
 				} else {
 					body, _ := ioutil.ReadAll(resp.Body)
-					fmt.Printf("%v: %s, %s\n", resp.StatusCode, gwURL, body)
+					if debug {
+						fmt.Printf("%v: %s, %s, req: %+v, resp: %+v\n", resp.StatusCode, gwURL, body, req, resp)
+					} else {
+						fmt.Printf("%v: %s, %s\n", resp.StatusCode, gwURL, body)
+					}
+
 					resp.Body.Close()
 				}
 				wg.Done()
