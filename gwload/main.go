@@ -163,8 +163,8 @@ func main() {
 	flag.StringVar(&bucket, "b", "", "Bucket name")
 	flag.IntVar(&rounds, "n", 1, "Number of rounds to run")
 	flag.IntVar(&concurent, "c", 10, "Number of requests to run concurrently")
-	flag.StringVar(&maxSizeArg, "max", "128K", "Max size of objects in bytes with postfix K, M, and G")
-	flag.StringVar(&minSizeArg, "min", "128K", "Min size of objects in bytes with postfix K, M, and G")
+	flag.StringVar(&maxSizeArg, "max", "10M", "Max size of objects in bytes with postfix K, M, and G")
+	flag.StringVar(&minSizeArg, "min", "2M", "Min size of objects in bytes with postfix K, M, and G")
 	flag.Parse()
 	if gw == "" || endpoint == "" {
 		fmt.Printf("unknown gw:%v, endpoint:%v\n", gw, endpoint)
