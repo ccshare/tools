@@ -56,7 +56,10 @@ func signV4(region, ak, sk, method, endpoint, path, hash string, header []string
 	}
 	req.URL.Path = path
 
-	cred := credentials.NewStaticCredentialsProvider(ak, sk, "")
+	q := req.URL.Query()
+	q.Set("x-id", "GetObject")
+	req.URL.RawQuery = q.Encode()
+
 	sign := v4.NewSigner()
 
 	for _, v := range header {
@@ -64,10 +67,15 @@ func signV4(region, ak, sk, method, endpoint, path, hash string, header []string
 		if i < 1 || i >= len(v)-1 {
 			return fmt.Errorf("invalid header: %s", v)
 		}
+		if strings.ToLower(v[:i]) == "x-amz-content-sha256" {
+			hash = v[i+1:]
+		}
 		req.Header.Add(v[:i], v[i+1:])
 	}
+	req.Header.Add("host", req.URL.Host)
 
-	e := sign.SignHTTP(context.Background(), cred.Value, req, hash, "s3", region, t)
+	cred := credentials.NewStaticCredentialsProvider(ak, sk, "")
+	e := sign.SignHTTP(context.Background(), cred.Value, req, hash, "s3", "", t)
 	if e != nil {
 		return fmt.Errorf("sign error %w", e)
 	}
@@ -128,10 +136,11 @@ func main() {
 	rootCmd.PersistentFlags().StringVarP(&sk, "sk", "", "ChangeMeChangeMeChangeMeChangeMeChangeMe", "secret key")
 	rootCmd.PersistentFlags().BoolVarP(&presign, "presign", "", false, "presign request")
 	rootCmd.PersistentFlags().DurationVarP(&presignExp, "expire", "", 12*time.Hour, "presign URL expiration")
-	rootCmd.PersistentFlags().StringArrayVarP(&header, "header", "H", nil, "http headers to sign(-H'host:b.cc' -H'x-amz-date:20191119T191919Z')")
+	rootCmd.PersistentFlags().StringArrayVarP(&header, "header", "H", []string{"x-amz-content-sha256:e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855", "accept-encoding:identity", "amz-sdk-invocation-id:69ee79c7-a395-45b2-ad71-a7dc6220ec97", "amz-sdk-request:attempt=1; max=3"}, "http headers to sign(-H'x-amz-date:20191119T191919Z')")
 	rootCmd.PersistentFlags().StringP("method", "X", http.MethodGet, "http request method")
 	rootCmd.PersistentFlags().StringP("hash", "", "UNSIGNED-PAYLOAD", "body checksum")
-	rootCmd.PersistentFlags().StringP("time", "t", time.Now().UTC().Format("20060102T150405Z"), "signing UTC time")
+	//rootCmd.PersistentFlags().StringP("time", "t", time.Now().UTC().Format("20060102T150405Z"), "signing UTC time")
+	rootCmd.PersistentFlags().StringP("time", "t", "20201115T144915Z", "signing UTC time")
 
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Println(err)

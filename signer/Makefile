@@ -33,7 +33,6 @@ install: default
 	install ${BINARY} /usr/local/bin/
 
 clean:
-	rm -rf *zip
-	rm -rf ${BINARY}
+	rm -rf *zip ${BINARY}
 
 .PHONY: pkg test vet default clean
