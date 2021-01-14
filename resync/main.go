@@ -23,6 +23,7 @@ const (
 var (
 	srcArg    string
 	dstArg    string
+	force     bool
 	srcClient redisClient
 	dstClient redisClient
 	dbKey     = []string{
@@ -32,9 +33,9 @@ var (
 		"GW_BUCKET",
 		"GW_CACHE_SETTING",
 	}
-	keyPrefix = []string{
-		"SH::",
-		"SH::",
+	dbKeyPattern = []string{
+		"SH::*",
+		"SZ::*",
 	}
 )
 
@@ -58,6 +59,7 @@ func (c *redisClient) Keys(pattern string) (data []string, err error) {
 	} else if c.cluster != nil {
 		data, err = c.cluster.Keys(pattern).Result()
 	}
+
 	return
 }
 
@@ -66,6 +68,15 @@ func (c *redisClient) Dump(k string) (data []byte, err error) {
 		data, err = c.client.Dump(k).Bytes()
 	} else if c.cluster != nil {
 		data, err = c.cluster.Dump(k).Bytes()
+	}
+	return
+}
+
+func (c *redisClient) Del(k string) (err error) {
+	if c.client != nil {
+		err = c.client.Del(k).Err()
+	} else if c.cluster != nil {
+		err = c.cluster.Del(k).Err()
 	}
 	return
 }
@@ -148,15 +159,19 @@ func keySync(key []string) error {
 		if err != nil {
 			return fmt.Errorf("dump %s error %w", k, err)
 		}
+		if force {
+			dstClient.Del(k)
+		}
 		err = dstClient.Restore(k, string(data), 0)
 		if err != nil {
 			return fmt.Errorf("dump %s error %w", k, err)
 		}
+		log.Printf("success sync: %s\n", k)
 	}
 	return nil
 }
 
-func prefixSync(prefix []string) error {
+func patternSync(prefix []string) error {
 	for _, p := range prefix {
 		keys, err := srcClient.Keys(p)
 		if err != nil {
@@ -167,37 +182,46 @@ func prefixSync(prefix []string) error {
 			if err != nil {
 				return fmt.Errorf("dump %s error %w", k, err)
 			}
-			err = dstClient.Restore(k, string(data), 0)
+			ttl, err := srcClient.TTL(k)
+			if err != nil {
+				return fmt.Errorf("ttl %s error %w", k, err)
+			}
+			if force {
+				dstClient.Del(k)
+			}
+			err = dstClient.Restore(k, string(data), ttl)
 			if err != nil {
 				return fmt.Errorf("dump %s error %w", k, err)
 			}
+			log.Printf("success sync: %s\n", k)
 		}
 	}
 	return nil
 }
 
 func main() {
-	flag.StringVar(&srcArg, "src", "redis://127.0.0.1:6379/1", "src redis address")
+	flag.StringVar(&srcArg, "src", "redis://192.168.55.2:6379/8", "src redis address")
 	flag.StringVar(&dstArg, "dst", "redis://127.0.0.1:6379/2", "dst redis address")
+	flag.BoolVar(&force, "force", false, "force sync, will overwrite exists key")
 	flag.Parse()
 
 	err := initRedisClient(&srcClient, srcArg)
 	if err != nil {
-		log.Fatal("init src redis client", err)
+		log.Fatal("init src redis client error: ", err)
 	}
 	err = initRedisClient(&dstClient, dstArg)
 	if err != nil {
-		log.Fatal("init dst redis client", err)
+		log.Fatal("init dst redis client error: ", err)
 	}
 
 	err = keySync(dbKey)
 	if err != nil {
-		log.Fatal("key sync error", err)
+		log.Fatal("key sync error: ", err)
 	}
 
-	err = prefixSync(keyPrefix)
+	err = patternSync(dbKeyPattern)
 	if err != nil {
-		log.Fatal("prefix sync error", err)
+		log.Fatal("prefix sync error: ", err)
 	}
 
 }
