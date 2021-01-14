@@ -1,0 +1,4 @@
+github.com/rryqszq4/go-murmurhash v0.0.0-20200928095432-ecbe6f02802a h1:5uv8pVV1QOvZlUFEsRSoDg6cxMaM6UWQYDAWjKCLS0M=
+github.com/rryqszq4/go-murmurhash v0.0.0-20200928095432-ecbe6f02802a/go.mod h1:496D/9JH02mv7lzToUsbV4I3N7/W2YVkC9KFK0NiqlE=
+github.com/tenfyzhong/cityhash v0.0.0-20181130044406-4c2731b5918c h1:Y3PUeYj+OuuOy7BnbIvtGOj9YDKjPHsZyN/2AJqN32s=
+github.com/tenfyzhong/cityhash v0.0.0-20181130044406-4c2731b5918c/go.mod h1:Izvvi9mFtnF9nbPc2Z/gazIliNnYtxOsbQnFYpmxbfc=

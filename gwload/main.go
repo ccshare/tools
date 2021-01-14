@@ -14,8 +14,8 @@ import (
 	"io/ioutil"
 	"log"
 	mrand "math/rand"
-	"net"
 	"net/http"
+	"net/http/httptrace"
 	"net/url"
 	"strconv"
 	"sync"
@@ -45,24 +45,6 @@ var (
 
 func init() {
 	mrand.Seed(time.Now().UnixNano())
-}
-
-// transport represent Our HTTP transport used for the roundtripper below
-var transport http.RoundTripper = &http.Transport{
-	Proxy: http.ProxyFromEnvironment,
-	Dial: (&net.Dialer{
-		Timeout:   30 * time.Second,
-		KeepAlive: 30 * time.Second,
-	}).Dial,
-	TLSHandshakeTimeout:   10 * time.Second,
-	ExpectContinueTimeout: 0,
-	// Allow an unlimited number of idle connections
-	MaxIdleConnsPerHost: 4096,
-	MaxIdleConns:        0,
-	// But limit their idle time
-	IdleConnTimeout: time.Minute,
-	// Ignore TLS errors
-	TLSClientConfig: &tls.Config{InsecureSkipVerify: true},
 }
 
 // RandomString gen random string with len
@@ -184,8 +166,31 @@ func objectSize(min, max uint64) uint64 {
 		return max
 	}
 	return mrand.Uint64()%(max-min) + min
-
 }
+
+func prettyRequest(req *http.Request) (s string) {
+	s = fmt.Sprintf("\nMethod: %s\n", req.Method)
+	s = fmt.Sprintf("%sURL: %s\n", s, req.URL.String())
+	s = fmt.Sprintf("%sContent-Length: %v\n", s, req.ContentLength)
+	s = fmt.Sprintf("%sHost: %v\n", s, req.Host)
+	for k, v := range req.Header {
+		s = fmt.Sprintf("%s  %v: %v\n", s, k, v)
+	}
+	return
+}
+
+func prettyResponse(resp *http.Response) (s string) {
+	s = fmt.Sprintf("\nContent-Length: %v\n", resp.ContentLength)
+	for k, v := range resp.Header {
+		s = fmt.Sprintf("%s  %v: %v\n", s, k, v)
+	}
+	if resp.Body != nil {
+		body, _ := ioutil.ReadAll(resp.Body)
+		s = fmt.Sprintf("%sbody:\n%s\n", s, body)
+	}
+	return
+}
+
 func main() {
 	flag.StringVar(&gw, "gw", "", "GW address")
 	//flag.StringVar(&sc, "sc", "", "sc address")
@@ -227,7 +232,10 @@ func main() {
 		log.Fatalf("Invalid -min argument for object size: %v", err)
 	}
 
-	httpClient := &http.Client{Transport: transport}
+	gwURL, err := url.Parse(gw)
+	if err != nil {
+		log.Fatalf("Invalid gw URL: %v", err)
+	}
 
 	var totalUploadCount int32
 	var totalUploadFailedCount int32
@@ -251,7 +259,7 @@ func main() {
 				key := RandomString(18)
 				presignURL, err := presignV2(http.MethodPut, endpoint, bucket, key, "application/octet-stream", accessKey, secretKey, 684000)
 				if err != nil {
-					log.Fatal("presign: ", err)
+					log.Fatal("presign: ", err, gwURL)
 					return
 				}
 				var gwURL string
@@ -276,38 +284,54 @@ func main() {
 					log.Fatal("NewRequest: ", err)
 					return
 				}
+
 				//req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
 				req.Header.Set("Content-Type", "application/octet-stream")
 				if uinfo != "" {
 					req.Header.Set("Cmb_uinfo", uinfo)
 				}
 
-				if resp, err := httpClient.Do(req); err != nil {
+				httpClient := &http.Client{
+					Transport: &http.Transport{
+						TLSClientConfig: &tls.Config{
+							InsecureSkipVerify: true,
+							ServerName:         req.Host,
+						},
+						MaxIdleConnsPerHost: 10,
+						DisableCompression:  false,
+						DisableKeepAlives:   false,
+					},
+				}
+				if debug {
+					trace := &httptrace.ClientTrace{
+						DNSStart: func(info httptrace.DNSStartInfo) {
+							fmt.Printf("DNS start %v for %v\n", time.Now(), info.Host)
+						},
+						DNSDone: func(info httptrace.DNSDoneInfo) {
+							fmt.Printf("DNS start %v for %v\n", time.Now(), info.Addrs)
+						},
+					}
+					req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+				}
+				resp, err := httpClient.Do(req)
+				if err != nil {
 					if resp != nil {
-						log.Fatalf("FATAL: Error uploading object: resp:%+v, error: %s\n", resp, err)
+						log.Fatalf("FATAL: Error uploading object: error: %s\n%s\n%s\n", err, prettyRequest(req), prettyResponse(resp))
 					} else {
-						log.Fatalf("FATAL: Error uploading object: resp:nil, error: %s\n", err)
+						log.Fatalf("FATAL: Error uploading object: error: %s\n%s\n", err, prettyRequest(req))
 					}
 				} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 					atomic.AddInt32(&uploadFailedCount, 1)
 					atomic.AddInt32(&uploadCount, -1)
-					if resp.StatusCode != http.StatusServiceUnavailable {
-						if resp.Body != nil {
-							body, _ := ioutil.ReadAll(resp.Body)
-							fmt.Printf("%v: %s, %+v, %s\n", resp.StatusCode, gwURL, resp, body)
-							resp.Body.Close()
-						} else {
-							fmt.Printf("%v: %s, %+v, nil\n", resp.StatusCode, gwURL, resp)
-						}
-					}
+				}
+				msg := ""
+				if debug {
+					msg = fmt.Sprintf("%v: %s<==============>%s", resp.StatusCode, prettyRequest(req), prettyResponse(resp))
 				} else {
-					body, _ := ioutil.ReadAll(resp.Body)
-					if debug {
-						fmt.Printf("%v: %s, %s, req: %+v, resp: %+v\n", resp.StatusCode, gwURL, body, req, resp)
-					} else {
-						fmt.Printf("%v: %s, %s\n", resp.StatusCode, gwURL, body)
-					}
-
+					msg = fmt.Sprintf("%v: %s", resp.StatusCode, gwURL)
+				}
+				fmt.Println(msg)
+				if resp.Body != nil {
 					resp.Body.Close()
 				}
 				wg.Done()
