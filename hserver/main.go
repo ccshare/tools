@@ -11,11 +11,14 @@ import (
 
 var (
 	port uint
+	root string
 )
 
 func main() {
 	flag.UintVar(&port, "p", 8080, "listen port")
+	flag.StringVar(&root, "r", ".", "web root dir")
 	flag.Parse()
+
 	logger := &httpretty.Logger{
 		Time:           true,
 		TLS:            true,
@@ -29,14 +32,7 @@ func main() {
 	addr := fmt.Sprintf(":%v", port)
 	fmt.Printf("Listen %s\n", addr)
 
-	if err := http.ListenAndServe(addr, logger.Middleware(helloHandler{})); err != http.ErrServerClosed {
+	if err := http.ListenAndServe(addr, logger.Middleware(http.FileServer(http.Dir(root)))); err != http.ErrServerClosed {
 		fmt.Fprintln(os.Stderr, err)
 	}
-}
-
-type helloHandler struct{}
-
-func (h helloHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
-	w.Header()["Date"] = nil
-	fmt.Fprintf(w, "Hello, world!")
 }
