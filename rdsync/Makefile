@@ -1,4 +1,4 @@
-APP?=resync
+APP?=rdsync
 BUILDDATE=$(shell date +'%Y-%m-%dT%H:%M:%SZ')
 VERSION=1.0.5
 LONGVER=${VERSION}@${BUILDDATE}@$(shell git rev-parse --short HEAD)
