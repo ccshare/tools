@@ -1,4 +1,4 @@
-module resync
+module rdsync
 
 go 1.15
 
