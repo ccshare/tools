@@ -21,12 +21,14 @@ const (
 )
 
 var (
+	srcClient redisClient
+	dstClient redisClient
 	srcArg    string
 	dstArg    string
 	force     bool
-	srcClient redisClient
-	dstClient redisClient
-	dbKey     = []string{
+	keyMode   bool
+	dbKey     string
+	gwDBKey   = []string{
 		"GW_APP",
 		"GW_USER",
 		"GW_STOR",
@@ -157,6 +159,10 @@ func keySync(key []string) error {
 	for _, k := range key {
 		data, err := srcClient.Dump(k)
 		if err != nil {
+			if err == redis.Nil {
+				log.Printf("key %s not exists", k)
+				continue
+			}
 			return fmt.Errorf("dump %s error %w", k, err)
 		}
 		if force {
@@ -164,9 +170,10 @@ func keySync(key []string) error {
 		}
 		err = dstClient.Restore(k, string(data), 0)
 		if err != nil {
-			return fmt.Errorf("dump %s error %w", k, err)
+			log.Printf("restore %s error %s", k, err)
+		} else {
+			fmt.Printf("success sync: %s\n", k)
 		}
-		log.Printf("success sync: %s\n", k)
 	}
 	return nil
 }
@@ -177,23 +184,8 @@ func patternSync(prefix []string) error {
 		if err != nil {
 			return fmt.Errorf("keys %s error %w", p, err)
 		}
-		for _, k := range keys {
-			data, err := srcClient.Dump(k)
-			if err != nil {
-				return fmt.Errorf("dump %s error %w", k, err)
-			}
-			ttl, err := srcClient.TTL(k)
-			if err != nil {
-				return fmt.Errorf("ttl %s error %w", k, err)
-			}
-			if force {
-				dstClient.Del(k)
-			}
-			err = dstClient.Restore(k, string(data), ttl)
-			if err != nil {
-				return fmt.Errorf("dump %s error %w", k, err)
-			}
-			log.Printf("success sync: %s\n", k)
+		if err := keySync(keys); err != nil {
+			log.Printf("sync pattern error %s", err)
 		}
 	}
 	return nil
@@ -202,7 +194,9 @@ func patternSync(prefix []string) error {
 func main() {
 	flag.StringVar(&srcArg, "src", "redis://192.168.55.2:6379/8", "src redis address")
 	flag.StringVar(&dstArg, "dst", "redis://127.0.0.1:6379/2", "dst redis address")
+	flag.StringVar(&dbKey, "k", "RMR_ZONE_INFO", "redis key to sync")
 	flag.BoolVar(&force, "force", false, "force sync, will overwrite exists key")
+	flag.BoolVar(&keyMode, "K", false, "only sync -k redis-key")
 	flag.Parse()
 
 	err := initRedisClient(&srcClient, srcArg)
@@ -214,14 +208,23 @@ func main() {
 		log.Fatal("init dst redis client error: ", err)
 	}
 
-	err = keySync(dbKey)
+	err = keySync([]string{dbKey})
 	if err != nil {
-		log.Fatal("key sync error: ", err)
+		log.Printf("sync key %s error: %s", dbKey, err)
+	}
+
+	if keyMode {
+		return
+	}
+
+	err = keySync(gwDBKey)
+	if err != nil {
+		log.Printf("sync gw keys error: %s", err)
 	}
 
 	err = patternSync(dbKeyPattern)
 	if err != nil {
-		log.Fatal("prefix sync error: ", err)
+		log.Printf("sync pattern error:%s ", err)
 	}
 
 }
