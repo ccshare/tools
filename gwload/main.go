@@ -43,6 +43,17 @@ var (
 	debug      bool
 )
 
+var httpClient = &http.Client{
+	Transport: &http.Transport{
+		TLSClientConfig: &tls.Config{
+			InsecureSkipVerify: true,
+		},
+		MaxIdleConnsPerHost: 10,
+		DisableCompression:  false,
+		DisableKeepAlives:   false,
+	},
+}
+
 func init() {
 	mrand.Seed(time.Now().UnixNano())
 }
@@ -291,17 +302,6 @@ func main() {
 					req.Header.Set("Cmb_uinfo", uinfo)
 				}
 
-				httpClient := &http.Client{
-					Transport: &http.Transport{
-						TLSClientConfig: &tls.Config{
-							InsecureSkipVerify: true,
-							ServerName:         req.Host,
-						},
-						MaxIdleConnsPerHost: 10,
-						DisableCompression:  false,
-						DisableKeepAlives:   false,
-					},
-				}
 				if debug {
 					trace := &httptrace.ClientTrace{
 						DNSStart: func(info httptrace.DNSStartInfo) {
