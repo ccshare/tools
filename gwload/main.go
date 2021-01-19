@@ -38,8 +38,9 @@ var (
 	secretKey  string
 	maxSizeArg string
 	minSizeArg string
+	idPrefix   string
+	keyPrefix  string
 	concurent  int
-	rounds     int
 	debug      bool
 )
 
@@ -180,10 +181,9 @@ func objectSize(min, max uint64) uint64 {
 }
 
 func prettyRequest(req *http.Request) (s string) {
-	s = fmt.Sprintf("\nMethod: %s\n", req.Method)
-	s = fmt.Sprintf("%sURL: %s\n", s, req.URL.String())
-	s = fmt.Sprintf("%sContent-Length: %v\n", s, req.ContentLength)
-	s = fmt.Sprintf("%sHost: %v\n", s, req.Host)
+	s = fmt.Sprintf("%s\n", req.URL.String())
+	s = fmt.Sprintf("%s  Content-Length: %v\n", s, req.ContentLength)
+	s = fmt.Sprintf("%s  Host: %v\n", s, req.Host)
 	for k, v := range req.Header {
 		s = fmt.Sprintf("%s  %v: %v\n", s, k, v)
 	}
@@ -191,7 +191,7 @@ func prettyRequest(req *http.Request) (s string) {
 }
 
 func prettyResponse(resp *http.Response) (s string) {
-	s = fmt.Sprintf("\nContent-Length: %v\n", resp.ContentLength)
+	s = fmt.Sprintf("\n  Content-Length: %v\n", resp.ContentLength)
 	for k, v := range resp.Header {
 		s = fmt.Sprintf("%s  %v: %v\n", s, k, v)
 	}
@@ -213,10 +213,11 @@ func main() {
 	flag.StringVar(&urlType, "t", "static", "GW url type(static,dyanmic2)")
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
 	flag.StringVar(&bucket, "b", "", "Bucket name")
-	flag.IntVar(&rounds, "n", 1, "Number of rounds to run")
 	flag.IntVar(&concurent, "c", 20, "Number of requests to run concurrently")
 	flag.StringVar(&maxSizeArg, "max", "10M", "Max size of objects in bytes with postfix K, M, and G")
 	flag.StringVar(&minSizeArg, "min", "2M", "Min size of objects in bytes with postfix K, M, and G")
+	flag.StringVar(&idPrefix, "id-prefix", "i001", "Prefix of header x-request-id")
+	flag.StringVar(&keyPrefix, "key-prefix", "k001", "Prefix of Object name")
 	flag.BoolVar(&debug, "debug", false, "debug log level")
 	flag.Parse()
 	if gw == "" || endpoint == "" {
@@ -248,9 +249,6 @@ func main() {
 		log.Fatalf("Invalid gw URL: %v", err)
 	}
 
-	var totalUploadCount int32
-	var totalUploadFailedCount int32
-
 	objectData := make([]byte, maxObjSize)
 	if n, e := rand.Read(objectData); e != nil {
 		log.Fatalf("generate random data failed: %s", e)
@@ -258,91 +256,96 @@ func main() {
 		log.Fatalf("invalid random data size, got %d, expect %d", n, maxObjSize)
 	}
 
-	for r := 1; r <= rounds; r++ {
-		var uploadCount, uploadFailedCount int32
-		wg := sync.WaitGroup{}
-		for n := 1; n <= concurent; n++ {
-			wg.Add(1)
-			go func() {
-				atomic.AddInt32(&uploadCount, 1)
-				randomSize := objectSize(minObjSize, maxObjSize)
-				fileobj := bytes.NewReader(objectData[0:randomSize])
-				key := RandomString(18)
-				presignURL, err := presignV2(http.MethodPut, endpoint, bucket, key, "application/octet-stream", accessKey, secretKey, 684000)
+	var uploadCount, uploadFailedCount int32
+	wg := sync.WaitGroup{}
+	for n := 1; n <= concurent; n++ {
+		wg.Add(1)
+		go func(n int) {
+			defer wg.Done()
+			atomic.AddInt32(&uploadCount, 1)
+			randomSize := objectSize(minObjSize, maxObjSize)
+			fileobj := bytes.NewReader(objectData[0:randomSize])
+			randomStr := RandomString(10)
+
+			key := keyPrefix + "-" + randomStr
+			presignURL, err := presignV2(http.MethodPut, endpoint, bucket, key, "application/octet-stream", accessKey, secretKey, 684000)
+			if err != nil {
+				log.Fatal("presign: ", err, gwURL)
+				return
+			}
+
+			var gwURL string
+			if urlType == "dynamic2" {
+				gwURL, err = GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
 				if err != nil {
-					log.Fatal("presign: ", err, gwURL)
+					log.Fatal("Gen dynamic2 URL error: ", presignURL, err)
 					return
 				}
-				var gwURL string
-
-				if urlType == "dynamic2" {
-					gwURL, err = GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
-					if err != nil {
-						log.Fatal("GenGWURL: ", presignURL, err)
-						return
-					}
-				} else if urlType == "static" {
-					gwURL, err = GenStaticURL(gw, appID, appKey, presignURL)
-					if err != nil {
-						log.Fatal("GenGWURL: ", presignURL, err)
-						return
-					}
-					uinfo = ""
-				}
-
-				req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
+			} else if urlType == "static" {
+				gwURL, err = GenStaticURL(gw, appID, appKey, presignURL)
 				if err != nil {
-					log.Fatal("NewRequest: ", err)
+					log.Fatal("Gen static URL error: ", presignURL, err)
 					return
 				}
+				uinfo = ""
+			} else {
+				log.Fatal("unknown URL type: ", urlType)
+			}
 
-				//req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
-				req.Header.Set("Content-Type", "application/octet-stream")
-				if uinfo != "" {
-					req.Header.Set("Cmb_uinfo", uinfo)
-				}
+			req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
+			if err != nil {
+				log.Fatal("NewRequest error: ", err)
+				return
+			}
 
-				if debug {
-					trace := &httptrace.ClientTrace{
-						DNSStart: func(info httptrace.DNSStartInfo) {
-							fmt.Printf("DNS start %v for %v\n", time.Now(), info.Host)
-						},
-						DNSDone: func(info httptrace.DNSDoneInfo) {
-							fmt.Printf("DNS start %v for %v\n", time.Now(), info.Addrs)
-						},
-					}
-					req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+			//req.Header.Set("Content-Length", strconv.FormatUint(randomSize, 10))
+			req.Header.Set("X-request-id", fmt.Sprintf("%s-%s-%v", idPrefix, randomStr, n))
+			req.Header.Set("Content-Type", "application/octet-stream")
+			if uinfo != "" {
+				req.Header.Set("Cmb_uinfo", uinfo)
+			}
+
+			if debug {
+				trace := &httptrace.ClientTrace{
+					DNSStart: func(info httptrace.DNSStartInfo) {
+						fmt.Printf("DNS start %v for %v\n", time.Now(), info.Host)
+					},
+					DNSDone: func(info httptrace.DNSDoneInfo) {
+						fmt.Printf("DNS start %v for %v\n", time.Now(), info.Addrs)
+					},
 				}
-				resp, err := httpClient.Do(req)
-				if err != nil {
-					if resp != nil {
-						log.Fatalf("FATAL: Error uploading object: error: %s\n%s\n%s\n", err, prettyRequest(req), prettyResponse(resp))
-					} else {
-						log.Fatalf("FATAL: Error uploading object: error: %s\n%s\n", err, prettyRequest(req))
-					}
-				} else if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-					atomic.AddInt32(&uploadFailedCount, 1)
-					atomic.AddInt32(&uploadCount, -1)
-				}
-				msg := ""
-				if debug {
-					msg = fmt.Sprintf("%v: %s<==============>%s", resp.StatusCode, prettyRequest(req), prettyResponse(resp))
+				req = req.WithContext(httptrace.WithClientTrace(req.Context(), trace))
+			}
+			startTime := time.Now()
+			resp, err := httpClient.Do(req)
+			if err != nil {
+				if resp != nil {
+					log.Printf("uploading Object error: %s\n%s\n%s\n", err, prettyRequest(req), prettyResponse(resp))
 				} else {
-					msg = fmt.Sprintf("%v: %s", resp.StatusCode, gwURL)
+					log.Printf("uploading Object error: %s\n%s\n", err, prettyRequest(req))
 				}
-				fmt.Println(msg)
-				if resp.Body != nil {
-					resp.Body.Close()
-				}
-				wg.Done()
-			}()
-		}
-		wg.Wait()
+				return
+			}
 
-		totalUploadCount += uploadCount
-		totalUploadFailedCount += totalUploadFailedCount
-		fmt.Printf("%4d\t\t%v/%v\n", r, uploadFailedCount, uploadCount)
+			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+				atomic.AddInt32(&uploadFailedCount, 1)
+				atomic.AddInt32(&uploadCount, -1)
+			}
+
+			msg := fmt.Sprintf("%v %v", resp.StatusCode, time.Since(startTime).Milliseconds())
+			if debug {
+				msg = fmt.Sprintf("%s %s<==============>%s", msg, prettyRequest(req), prettyResponse(resp))
+			} else {
+				msg = fmt.Sprintf("%s %s", msg, gwURL)
+			}
+			fmt.Println(msg)
+
+			if resp.Body != nil {
+				resp.Body.Close()
+			}
+		}(n)
 	}
+	wg.Wait()
 
-	fmt.Printf("done\t\t%v/%v\n", totalUploadFailedCount, totalUploadCount)
+	fmt.Printf("done\t\t%v/%v\n", uploadFailedCount, uploadCount)
 }
