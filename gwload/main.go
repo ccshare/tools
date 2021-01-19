@@ -18,6 +18,7 @@ import (
 	"net/http/httptrace"
 	"net/url"
 	"strconv"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -95,6 +96,21 @@ func presignV2(method, endpoint, bucket, key, contentType, ak, sk string, exp in
 
 	return u.String(), nil
 }
+
+func indexN(s string, c byte, n int) int {
+	length := len(s)
+	count := 0
+	for i := 0; i < length; i++ {
+		if s[i] == c {
+			count++
+		}
+		if count == n {
+			return i
+		}
+	}
+	return -1
+}
+
 func gwSignatue(key, uinfo, URL string, exp int64, extra []string) string {
 	buffer := bytes.NewBufferString(URL)
 	buffer.WriteString("\n")
@@ -138,6 +154,37 @@ func GenStaticURL(gw, appID, appKey, presignURL string) (string, error) {
 		sign,
 		appID,
 		0), nil
+}
+
+// GenStaticV2URL generate static v2 URL
+// /s2/{app}/{sign}/{bucket:[0-9A-Za-z_.-]{3,64}}/{key:.*}?ak=xxx&signature=ssss
+func GenStaticV2URL(gw, app, key, presignURL string) (string, error) {
+	if app == "" {
+		return "", errors.New("invalid appID")
+	}
+	if key == "" {
+		return "", errors.New("invalid appKey")
+	}
+	if strings.HasPrefix(gw, "http") == false {
+		return "", errors.New("invalid gateway addr")
+	}
+	if strings.HasPrefix(presignURL, "http") == false {
+		return "", errors.New("invalid presignURL")
+	}
+	psgURL, err := url.ParseRequestURI(presignURL)
+	if err != nil {
+		return "", err
+	}
+
+	sign := gwSignatue(key, "", psgURL.RequestURI(), 0, nil)
+
+	// server/s2/{app}/{sign}/{bucket:[0-9A-Za-z_.-]{3,64}}/{key:.*}?ak=xxx&signature=ssss
+	pos := indexN(presignURL, '/', 3)
+	if pos < 0 {
+		return "", errors.New("invalid presignURL")
+	}
+
+	return fmt.Sprintf("%s/s2/%s/%s%s", gw, app, sign, presignURL[pos:]), nil
 }
 
 // GenDynamic2URL generate dynamic2 URL
@@ -210,7 +257,7 @@ func main() {
 	flag.StringVar(&appID, "i", "", "App ID")
 	flag.StringVar(&appKey, "k", "", "App key")
 	flag.StringVar(&uinfo, "u", "uinfo-value", "UInfo")
-	flag.StringVar(&urlType, "t", "static", "GW url type(static,dyanmic2)")
+	flag.StringVar(&urlType, "t", "static", "GW url type(static,staticv2,dyanmic2)")
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
 	flag.StringVar(&bucket, "b", "", "Bucket name")
 	flag.IntVar(&concurent, "c", 20, "Number of requests to run concurrently")
@@ -226,7 +273,7 @@ func main() {
 		return
 	}
 
-	if urlType != "static" && urlType != "dynamic2" {
+	if urlType != "static" && urlType != "staticv2" && urlType != "dynamic2" {
 		fmt.Printf("unknown GW URL Type:%v\n", urlType)
 		flag.Usage()
 		return
@@ -285,6 +332,13 @@ func main() {
 				gwURL, err = GenStaticURL(gw, appID, appKey, presignURL)
 				if err != nil {
 					log.Fatal("Gen static URL error: ", presignURL, err)
+					return
+				}
+				uinfo = ""
+			} else if urlType == "staticv2" {
+				gwURL, err = GenStaticV2URL(gw, appID, appKey, presignURL)
+				if err != nil {
+					log.Fatal("Gen staticv2 URL error: ", presignURL, err)
 					return
 				}
 				uinfo = ""
