@@ -411,6 +411,6 @@ func main() {
 		}(n)
 	}
 	wg.Wait()
-
-	fmt.Printf("done \t\t%v/%v\t%v\n", uploadFailedCount, concurent, time.Since(beginTime).Milliseconds())
+	endtime := time.Now()
+	fmt.Printf("done\t%v/%v\t%v\t%s\n", uploadFailedCount, concurent, endtime.Sub(beginTime).Milliseconds(), endtime)
 }
