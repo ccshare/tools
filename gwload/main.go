@@ -42,6 +42,7 @@ var (
 	idPrefix   string
 	keyPrefix  string
 	concurent  int
+	timeout    uint
 	debug      bool
 )
 
@@ -261,6 +262,7 @@ func main() {
 	flag.StringVar(&endpoint, "e", "", "S3 endpoint")
 	flag.StringVar(&bucket, "b", "", "Bucket name")
 	flag.IntVar(&concurent, "c", 20, "Number of requests to run concurrently")
+	flag.UintVar(&timeout, "T", 180, "Timeout for each request in seconds")
 	flag.StringVar(&maxSizeArg, "max", "10M", "Max size of objects in bytes with postfix K, M, and G")
 	flag.StringVar(&minSizeArg, "min", "2M", "Min size of objects in bytes with postfix K, M, and G")
 	flag.StringVar(&idPrefix, "id-prefix", "i001", "Prefix of header x-request-id")
@@ -303,6 +305,10 @@ func main() {
 		log.Fatalf("invalid random data size, got %d, expect %d", n, maxObjSize)
 	}
 
+	httpClient.Timeout = time.Duration(timeout) * time.Second
+
+	beginTime := time.Now()
+	fmt.Println("begin: ", beginTime)
 	var uploadCount, uploadFailedCount int32
 	wg := sync.WaitGroup{}
 	for n := 1; n <= concurent; n++ {
@@ -401,5 +407,5 @@ func main() {
 	}
 	wg.Wait()
 
-	fmt.Printf("done\t\t%v/%v\n", uploadFailedCount, uploadCount)
+	fmt.Printf("done \t\t%v/%v\t%v\n", uploadFailedCount, uploadCount, time.Since(beginTime).Milliseconds())
 }
