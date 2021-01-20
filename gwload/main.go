@@ -309,13 +309,12 @@ func main() {
 
 	beginTime := time.Now()
 	fmt.Println("begin: ", beginTime)
-	var uploadCount, uploadFailedCount int32
+	var uploadFailedCount int32
 	wg := sync.WaitGroup{}
 	for n := 1; n <= concurent; n++ {
 		wg.Add(1)
 		go func(n int) {
 			defer wg.Done()
-			atomic.AddInt32(&uploadCount, 1)
 			randomSize := objectSize(minObjSize, maxObjSize)
 			fileobj := bytes.NewReader(objectData[0:randomSize])
 			randomStr := RandomString(10)
@@ -323,6 +322,7 @@ func main() {
 			key := keyPrefix + "-" + randomStr
 			presignURL, err := presignV2(http.MethodPut, endpoint, bucket, key, "application/octet-stream", accessKey, secretKey, 684000)
 			if err != nil {
+				atomic.AddInt32(&uploadFailedCount, 1)
 				log.Fatal("presign: ", err, gwURL)
 				return
 			}
@@ -331,12 +331,14 @@ func main() {
 			if urlType == "dynamic2" {
 				gwURL, err = GenDynamic2URL(gw, appID, appKey, presignURL, uinfo, time.Now().Add(1*time.Hour).Unix())
 				if err != nil {
+					atomic.AddInt32(&uploadFailedCount, 1)
 					log.Fatal("Gen dynamic2 URL error: ", presignURL, err)
 					return
 				}
 			} else if urlType == "static" {
 				gwURL, err = GenStaticURL(gw, appID, appKey, presignURL)
 				if err != nil {
+					atomic.AddInt32(&uploadFailedCount, 1)
 					log.Fatal("Gen static URL error: ", presignURL, err)
 					return
 				}
@@ -349,11 +351,14 @@ func main() {
 				}
 				uinfo = ""
 			} else {
+				atomic.AddInt32(&uploadFailedCount, 1)
 				log.Fatal("unknown URL type: ", urlType)
+				return
 			}
 
 			req, err := http.NewRequest(http.MethodPut, gwURL, fileobj)
 			if err != nil {
+				atomic.AddInt32(&uploadFailedCount, 1)
 				log.Fatal("NewRequest error: ", err)
 				return
 			}
@@ -379,6 +384,7 @@ func main() {
 			startTime := time.Now()
 			resp, err := httpClient.Do(req)
 			if err != nil {
+				atomic.AddInt32(&uploadFailedCount, 1)
 				if resp != nil {
 					log.Printf("uploading Object error: %s\n%s\n%s\n", err, prettyRequest(req), prettyResponse(resp))
 				} else {
@@ -389,7 +395,6 @@ func main() {
 
 			if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
 				atomic.AddInt32(&uploadFailedCount, 1)
-				atomic.AddInt32(&uploadCount, -1)
 			}
 
 			msg := fmt.Sprintf("%v %v", resp.StatusCode, time.Since(startTime).Milliseconds())
@@ -407,5 +412,5 @@ func main() {
 	}
 	wg.Wait()
 
-	fmt.Printf("done \t\t%v/%v\t%v\n", uploadFailedCount, uploadCount, time.Since(beginTime).Milliseconds())
+	fmt.Printf("done \t\t%v/%v\t%v\n", uploadFailedCount, concurent, time.Since(beginTime).Milliseconds())
 }
