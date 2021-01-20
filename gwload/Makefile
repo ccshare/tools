@@ -1,6 +1,6 @@
 APP?=gwload
 BUILDDATE=$(shell date +'%Y-%m-%dT%H:%M:%SZ')
-VERSION=1.0.4
+VERSION=1.0.5
 LONGVER=${VERSION}@${BUILDDATE}@$(shell git rev-parse --short HEAD)
 
 LDFLAGS=-ldflags "-X main.version=${LONGVER}"
