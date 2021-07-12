@@ -57,6 +57,7 @@ func main() {
 	flag.Int64Var(&nBytes, "n", 128, "bytes to download one time")
 	flag.IntVar(&idleTimeout, "idle-timeout", 60, "http idle timeout after download in seconds")
 	flag.IntVar(&interval, "i", 1, "download interval time in seconds")
+	fi := flag.Int("fi", 60, "two file download interval")
 	flag.Parse()
 
 	for i := 1; i <= nFiles; i++ {
@@ -66,7 +67,7 @@ func main() {
 			return
 		}
 		log.Printf("%v download finished", i)
-		time.Sleep(time.Duration(interval) * time.Second)
+		time.Sleep(time.Duration(*fi) * time.Second)
 	}
 
 	log.Printf("all finished, enter idle mode")
