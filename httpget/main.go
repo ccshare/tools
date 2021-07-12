@@ -65,6 +65,8 @@ func main() {
 			log.Println("download error: ", err)
 			return
 		}
+		log.Printf("%v download finished", i)
+		time.Sleep(time.Duration(interval) * time.Second)
 	}
 
 	log.Printf("all finished, enter idle mode")
